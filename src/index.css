@@ -26,7 +26,7 @@
                     radial-gradient(circle at 70% 80%, rgba(56, 189, 248, 0.35), transparent 24%);
   background-size: 220% 220%;
   background-blend-mode: screen;
-  animation: heroGradientShift 20s ease-in-out infinite, heroGlowPulse 8s ease-in-out infinite alternate;
+  animation: heroGradientShift 10s ease-in-out infinite, heroGlowPulse 8s ease-in-out infinite alternate;
 }
 
 @keyframes heroGradientShift {
