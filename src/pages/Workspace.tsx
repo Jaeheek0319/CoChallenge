@@ -139,7 +139,14 @@ export function Workspace() {
     }
   };
 
-  if (!project) return null;
+  if (loading || !project) {
+    return (
+      <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-slate-950">
+        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 font-medium">Loading Workspace...</p>
+      </div>
+    );
+  }
 
   const activeFile = files[activeFileIndex];
   const step = project.steps[currentStep];

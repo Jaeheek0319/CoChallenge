@@ -5,7 +5,7 @@ import { useProjects } from '../hooks/useProjects';
 import { Clock, CheckCircle, Code2, Trash2, ArrowRight } from 'lucide-react';
 
 export function Dashboard() {
-  const { projects } = useProjects();
+  const { projects, loading } = useProjects();
   const navigate = useNavigate();
 
   return (
@@ -27,7 +27,12 @@ export function Dashboard() {
         </div>
       </div>
 
-      {projects.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-32 border-2 border-dashed border-slate-800 rounded-3xl flex flex-col items-center justify-center">
+          <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4" />
+          <h3 className="text-xl font-bold mb-2 text-slate-300">Loading your journey...</h3>
+        </div>
+      ) : projects.length === 0 ? (
         <div className="text-center py-32 border-2 border-dashed border-slate-800 rounded-3xl">
           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6">
             <Code2 className="w-10 h-10 text-slate-700" />

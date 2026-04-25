@@ -33,7 +33,7 @@ export function Home() {
       } else {
         project = await generateProject(prompt, language, difficulty);
       }
-      saveProject({ ...project, currentStep: 0, updatedAt: new Date().toISOString() });
+      await saveProject({ ...project, currentStep: 0, updatedAt: new Date().toISOString() });
       navigate(`/workspace/${project.id}`);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Generation failed");
