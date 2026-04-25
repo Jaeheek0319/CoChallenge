@@ -1,268 +1,188 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Sparkles, Code, BrainCircuit, Rocket, ChevronRight, PlayCircle } from 'lucide-react';
-import { generateProject } from '../services/gemini';
-import { Language, Difficulty } from '../types';
-import { useProjects } from '../hooks/useProjects';
-
-const suggestionExamples = [
-  'Teach me how to build a weather dashboard',
-  'Teach me how to build a drawing app',
-  'Teach me how to build a recipe finder',
-  'Teach me how to build a portfolio website',
-  'Teach me how to build a memory game',
-];
+import { Sparkles, Code, BrainCircuit, Rocket, ShieldCheck, Layers } from 'lucide-react';
 
 export function Home() {
-  const navigate = useNavigate();
-  const { saveProject } = useProjects();
-  const [prompt, setPrompt] = useState(window.history.state?.usr?.presetPrompt || '');
-  const [language, setLanguage] = useState<Language>('html-css-js');
-  const [difficulty, setDifficulty] = useState<Difficulty>('Beginner');
-  const [loading, setLoading] = useState(false);
-  const [useTestData, setUseTestData] = useState(false);
-  const [suggestionIndex, setSuggestionIndex] = useState<number>(0);
-  const [isDeletingPrompt, setIsDeletingPrompt] = useState(false);
-  const [isPromptAnimationActive, setIsPromptAnimationActive] = useState(!window.history.state?.usr?.presetPrompt);
-  const animationPaused = useRef(false);
-
-  const handleGenerate = async () => {
-    if (!prompt.trim() && !useTestData) return;
-    setLoading(true);
-    try {
-      let project;
-      if (useTestData) {
-        const res = await fetch('/test_data/project.json');
-        if (!res.ok) throw new Error("Failed to load test data");
-        const data = await res.json();
-        project = {
-          ...data,
-          id: Math.random().toString(36).substring(7),
-          language,
-          difficulty
-        };
-      } else {
-        project = await generateProject(prompt, language, difficulty);
-      }
-      await saveProject({ ...project, currentStep: 0, updatedAt: new Date().toISOString() });
-      navigate(`/workspace/${project.id}`);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Generation failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isPromptAnimationActive || animationPaused.current) return;
-
-    const currentSuggestion = suggestionExamples[suggestionIndex];
-    const isComplete = prompt === currentSuggestion;
-    const shouldDelete = isDeletingPrompt || isComplete;
-    const baseDelay = shouldDelete ? 40 : 80;
-    const pauseDelay = isComplete ? 1200 : baseDelay;
-
-    const timeoutId = window.setTimeout(() => {
-      if (isComplete && !isDeletingPrompt) {
-        setIsDeletingPrompt(true);
-        return;
-      }
-
-      if (shouldDelete) {
-        const nextText = currentSuggestion.slice(0, Math.max(0, prompt.length - 1));
-        setPrompt(nextText);
-        if (nextText.length === 0) {
-          setIsDeletingPrompt(false);
-          setSuggestionIndex((prev) => (prev + 1) % suggestionExamples.length);
-        }
-      } else {
-        setPrompt(currentSuggestion.slice(0, prompt.length + 1));
-      }
-    }, pauseDelay);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [prompt, suggestionIndex, isDeletingPrompt, isPromptAnimationActive]);
-
-  const stopPromptAnimation = () => {
-    animationPaused.current = true;
-    setIsPromptAnimationActive(false);
-  };
-
-  const resumePromptAnimation = () => {
-    if (prompt.trim()) return;
-    animationPaused.current = false;
-    setIsPromptAnimationActive(true);
-  };
-
-  const examples = [
-    { title: "Snake Game", lang: "JavaScript", prompt: "Build me a retro snake game with score tracking" },
-    { title: "Calculator", lang: "HTML/CSS", prompt: "Create a modern dark-mode calculator" },
-    { title: "To-Do App", lang: "React", prompt: "Build a todo list with local storage persistence" },
-  ];
-
   return (
     <div className="relative isolate overflow-hidden">
-      {/* Background Gradients */}
       <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
-          <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] animated-hero-bg opacity-90 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"></div>
+        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] animated-hero-bg opacity-90 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"></div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 pt-20 pb-32 sm:pt-32 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex justify-center mb-8"
-          >
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <Sparkles className="w-4 h-4" />
-              AI-Powered Learning
+      <div className="max-w-7xl mx-auto px-6 pt-20 pb-32 sm:pt-24 lg:px-8">
+        <div className="grid gap-20 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">
+              <Sparkles className="h-4 w-4" />
+              Project-first learning
             </span>
-          </motion.div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-5xl font-bold tracking-tight text-white sm:text-7xl mb-6"
-          >
-            Learn to Code by <span className="text-blue-500">Building Projects</span>
-          </motion.h1>
+            <h1 className="mt-8 text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Build skills faster with AI-guided coding projects.
+            </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-lg leading-8 text-slate-400 mb-10"
-          >
-            Describe any project you want to make, and our AI will generate a tailored, step-by-step coding lesson with a built-in IDE and live preview.
-          </motion.p>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-400 sm:text-xl">
+              Turn ideas into real apps with interactive lessons, live previews, and a modern coding experience designed for learners who love to build.
+            </p>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            className="p-2 glass-panel rounded-2xl glow-blue max-w-2xl mx-auto mb-12"
-          >
-            <div className="flex flex-col gap-4 p-4">
-              <div className="relative border-b border-slate-800/50 pb-4">
-                <textarea
-                  value={prompt}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                    stopPromptAnimation();
-                    setPrompt(e.target.value);
-                  }}
-                  onFocus={stopPromptAnimation}
-                  onBlur={resumePromptAnimation}
-                  placeholder="What do you want to build?"
-                  className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-300 placeholder-slate-500 resize-none h-24"
-                />
-              </div>
-              
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 ml-1 tracking-wider">Language</span>
-                    <select
-                      value={language}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLanguage(e.target.value as Language)}
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="html-css-js">JavaScript (Web)</option>
-                      <option value="react">React</option>
-                      <option value="python" disabled>Python (Coming soon)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 ml-1 tracking-wider">Difficulty</span>
-                    <select
-                      value={difficulty}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDifficulty(e.target.value as Difficulty)}
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="Beginner">Beginner</option>
-                      <option value="Intermediate">Intermediate</option>
-                      <option value="Advanced">Advanced</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex flex-col items-start gap-1 ml-4 mt-5">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={useTestData}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUseTestData(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
-                      />
-                      <span className="text-sm font-medium text-slate-300">Use test data (bypass API)</span>
-                    </label>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading || (!prompt.trim() && !useTestData)}
-                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] active:scale-95"
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Rocket className="w-5 h-5 font-bold" />
-                      Generate Project
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Example Prompts */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-20">
-            {examples.map((ex, idx) => (
-              <motion.button
-                key={idx}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 + idx * 0.1 }}
-                onClick={() => setPrompt(ex.prompt)}
-                className="p-4 glass-panel rounded-xl text-left hover:border-blue-500/50 transition-all group active:scale-95"
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Link
+                to="/generation"
+                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 hover:bg-blue-500 transition-colors"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <PlayCircle className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{ex.lang}</span>
+                Start building
+              </Link>
+              <Link
+                to="/challenges"
+                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 px-8 py-3 text-sm font-semibold text-slate-100 hover:border-blue-500 hover:text-white transition-colors"
+              >
+                Explore challenges
+              </Link>
+            </div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+            <div className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-7 shadow-[0_32px_80px_-42px_rgba(15,23,42,0.8)] glass-panel">
+              <div className="flex items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-950/90 px-4 py-4">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.3em] text-blue-400">Launch faster</p>
+                  <p className="mt-2 text-xl font-semibold text-white">Your learning dashboard</p>
                 </div>
-                <p className="text-sm font-medium group-hover:text-blue-400 transition-colors">{ex.title}</p>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-1 italic">"{ex.prompt}"</p>
-              </motion.button>
-            ))}
+                <span className="rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300">New</span>
+              </div>
+
+              <div className="mt-6 space-y-4 text-slate-300">
+                <p>Sign up once and keep your progress, projects, and AI learning path in one place.</p>
+                <div className="flex flex-wrap gap-3">
+                  <span className="rounded-full border border-slate-800 bg-slate-950/90 px-3 py-2 text-sm text-slate-300">Live preview</span>
+                  <span className="rounded-full border border-slate-800 bg-slate-950/90 px-3 py-2 text-sm text-slate-300">Project templates</span>
+                  <span className="rounded-full border border-slate-800 bg-slate-950/90 px-3 py-2 text-sm text-slate-300">Guided steps</span>
+                  <span className="rounded-full border border-slate-800 bg-slate-950/90 px-3 py-2 text-sm text-slate-300">Saved progress</span>
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-[1.5rem] border border-slate-800 bg-slate-950/90 p-5">
+                <div className="flex items-center justify-between text-sm text-slate-500">
+                  <span>Enter your email</span>
+                  <span className="font-semibold text-slate-200">Free access</span>
+                </div>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <button className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition-colors">
+                    Sign up
+                  </button>
+                </div>
+                <p className="mt-3 text-xs text-slate-500">No credit card required • Instantly unlock guided project builds.</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5 }} className="mt-20 grid gap-6 lg:grid-cols-3">
+          <div className="glass-panel rounded-[2rem] border border-slate-800 p-8 hover:border-blue-500 transition-colors">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950/70 text-blue-400">
+              <BrainCircuit className="h-6 w-6" />
+            </div>
+            <h3 className="mt-6 text-xl font-semibold text-white">Personalized AI prompts</h3>
+            <p className="mt-3 text-slate-400 leading-7">Generate lesson plans for the exact project you want to build.</p>
           </div>
 
-          {/* How it Works */}
-          <div className="pt-20 border-t border-slate-900">
-            <h2 className="text-3xl font-bold mb-12">How it Works</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[
-                { icon: BrainCircuit, title: "1. Prompt", desc: "Describe the app or website you want to build in plain English." },
-                { icon: Code, title: "2. Guided IDE", desc: "Get a step-by-step curriculum with code tasks and real-time feedback." },
-                { icon: Rocket, title: "3. Build & Ship", desc: "Code in the browser, see live previews, and master core concepts." },
-              ].map((step, idx) => (
-                <div key={idx} className="flex flex-col items-center text-center p-6">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center mb-6 text-blue-500">
-                    <step.icon className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">{step.title}</h3>
-                  <p className="text-slate-400">{step.desc}</p>
-                </div>
-              ))}
+          <div className="glass-panel rounded-[2rem] border border-slate-800 p-8 hover:border-blue-500 transition-colors">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950/70 text-blue-400">
+              <Code className="h-6 w-6" />
+            </div>
+            <h3 className="mt-6 text-xl font-semibold text-white">Code with confidence</h3>
+            <p className="mt-3 text-slate-400 leading-7">Learn through real code examples and instant preview feedback.</p>
+          </div>
+
+          <div className="glass-panel rounded-[2rem] border border-slate-800 p-8 hover:border-blue-500 transition-colors">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950/70 text-blue-400">
+              <Rocket className="h-6 w-6" />
+            </div>
+            <h3 className="mt-6 text-xl font-semibold text-white">Ship real apps</h3>
+            <p className="mt-3 text-slate-400 leading-7">Finish projects that are portfolio-ready and skill-boosting.</p>
+          </div>
+        </motion.section>
+
+        <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }} className="mt-24 grid gap-10 lg:grid-cols-[0.9fr_1.1fr] items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-400">Mini visual demo</p>
+            <h2 className="mt-4 text-3xl font-bold text-white sm:text-4xl">See the experience before you build.</h2>
+            <p className="mt-6 text-slate-400 leading-8">Preview the guided workflow from project prompt to code editor to live app preview—all in one seamless learning environment.</p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-6">
+                <p className="text-sm font-semibold text-white">Step-by-step tasks</p>
+                <p className="mt-3 text-slate-400">Complete bite-sized lessons that keep you focused.</p>
+              </div>
+              <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-6">
+                <p className="text-sm font-semibold text-white">Interactive preview</p>
+                <p className="mt-3 text-slate-400">Watch your code come to life instantly.</p>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="relative overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950/80 p-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.9)]">
+            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-blue-500/20 to-transparent" />
+            <div className="relative grid gap-4">
+              <div className="flex items-center justify-between rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-400">
+                <span>AI Generator</span>
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Live</span>
+              </div>
+
+              <div className="rounded-[2rem] border border-slate-800 bg-slate-900 p-5">
+                <div className="mb-4 flex items-center gap-2 text-slate-500 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  <span>app.js</span>
+                </div>
+                <pre className="overflow-x-auto text-sm leading-7 text-slate-300"><code>{`const project = createProject('portfolio site');
+project.addSection('Hero');
+project.addFeature('Testimonials');
+renderPreview();`}</code></pre>
+              </div>
+
+              <div className="grid gap-4 rounded-[2rem] bg-slate-950/90 p-5 sm:grid-cols-2">
+                <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-4">
+                  <p className="text-sm text-slate-400">Preview</p>
+                  <p className="mt-3 text-white font-semibold">A responsive site appears instantly as you code.</p>
+                </div>
+                <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-4">
+                  <p className="text-sm text-slate-400">Learning</p>
+                  <p className="mt-3 text-white font-semibold">Every step ties back to the concepts you need to know.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.5 }} className="mt-24 rounded-[2rem] border border-slate-800 bg-slate-900/70 p-8 glass-panel">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-400">Getting started</p>
+              <h2 className="mt-4 text-3xl font-bold text-white">A clean path from first click to first project.</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 text-lg font-semibold">1</div>
+                <p className="text-sm font-semibold text-white">Choose a project</p>
+              </div>
+              <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 text-lg font-semibold">2</div>
+                <p className="text-sm font-semibold text-white">Follow guided steps</p>
+              </div>
+              <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 text-lg font-semibold">3</div>
+                <p className="text-sm font-semibold text-white">Launch your app</p>
+              </div>
+            </div>
+          </div>
+        </motion.section>
       </div>
     </div>
   );
