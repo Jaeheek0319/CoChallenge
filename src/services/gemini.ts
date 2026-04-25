@@ -117,7 +117,7 @@ Respond ONLY with a JSON object in this format:
 
   try {
     const result = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemma-4-26b-a4b-it",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
