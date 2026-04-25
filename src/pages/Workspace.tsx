@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useProjects } from '../hooks/useProjects';
 import { UserProject, ProjectFile } from '../types';
-import { getAIHelp } from '../services/gemini';
+import { getAIHelp, checkStepCompletion } from '../services/gemini';
 import { cn } from '../lib/utils';
 
 export function Workspace() {
@@ -28,6 +28,7 @@ export function Workspace() {
   const [aiMessage, setAiMessage] = useState('');
   const [userInput, setUserInput] = useState('');
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
+  const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -139,6 +140,34 @@ export function Workspace() {
     }
   };
 
+  const handleCheckStep = async () => {
+    if (!project) return;
+    
+    setIsChecking(true);
+    setAiLoading(true);
+    const currentCode = files.map(f => `// ${f.name}\n${f.content}`).join('\n\n');
+    const stepData = project.steps[currentStep];
+    
+    // Add a loading message to the chat history
+    setChatHistory(prev => [...prev, { role: 'user', text: `Can you check if I completed the task: "${stepData.task}"?` }]);
+
+    try {
+      const result = await checkStepCompletion(currentCode, stepData.task, stepData.solution);
+      setChatHistory(prev => [
+        ...prev, 
+        { 
+          role: 'ai', 
+          text: `${result.isComplete ? '✅ Excellent work!' : '❌ Not quite yet.'} ${result.feedback}`
+        }
+      ]);
+    } catch (e) {
+      setChatHistory(prev => [...prev, { role: 'ai', text: "Sorry, I couldn't check your code right now." }]);
+    } finally {
+      setIsChecking(false);
+      setAiLoading(false);
+    }
+  };
+
   if (loading || !project) {
     return (
       <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-slate-950">
@@ -210,14 +239,23 @@ export function Workspace() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           
-          <button 
-            onClick={handleNextStep}
-            disabled={currentStep === project.steps.length - 1}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
-          >
-            Next Step
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          <div className="flex-1 flex gap-2">
+            <button 
+              onClick={handleCheckStep}
+              disabled={isChecking}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
+            >
+              {isChecking ? 'Checking...' : 'Check'}
+            </button>
+            <button 
+              onClick={handleNextStep}
+              disabled={currentStep === project.steps.length - 1}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
+            >
+              Next Step
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

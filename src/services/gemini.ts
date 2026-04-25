@@ -91,3 +91,49 @@ export async function getAIHelp(code: string, question: string, context: string)
   const text = typeof (result as any).text === 'function' ? (result as any).text() : (result as any).text;
   return text || (result as any).content?.parts?.[0]?.text || "No response";
 }
+
+export interface StepCompletionResult {
+  isComplete: boolean;
+  feedback: string;
+}
+
+export async function checkStepCompletion(userCode: string, task: string, expectedSolution: string): Promise<StepCompletionResult> {
+  const prompt = `You are an expert coding evaluator. 
+The student is on a step with the following task:
+"${task}"
+
+Here is the expected solution reference:
+${expectedSolution}
+
+Here is the student's current code:
+${userCode}
+
+Analyze the student's code. Have they functionally completed the task requirements?
+Respond ONLY with a JSON object in this format:
+{
+  "isComplete": true/false,
+  "feedback": "If false, a brief 1-sentence hint on what is missing. If true, a short encouragement."
+}`;
+
+  try {
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+      },
+    } as any);
+
+    const response = result;
+    const text = typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text;
+    const finalContent = text || (response as any).content?.parts?.[0]?.text;
+    
+    return JSON.parse(finalContent);
+  } catch (error) {
+    console.error("Failed to check step completion:", error);
+    return {
+      isComplete: false,
+      feedback: "Failed to evaluate code. Please try again or ask for a hint."
+    };
+  }
+}
