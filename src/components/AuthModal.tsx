@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, Lock, Loader2, X } from 'lucide-react';
@@ -15,6 +16,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'login' }: AuthModalP
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setIsLogin(initialMode === 'login');
@@ -33,6 +35,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'login' }: AuthModalP
       setError(authError.message);
     } else {
       onClose();
+      navigate('/dashboard');
     }
     setLoading(false);
   };
