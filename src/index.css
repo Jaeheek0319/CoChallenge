@@ -20,6 +20,37 @@
   @apply shadow-[0_0_20px_-5px_rgba(37,99,235,0.3)];
 }
 
+.animated-hero-bg {
+  background-image: radial-gradient(circle at top left, rgba(59, 130, 246, 0.55), transparent 28%),
+                    radial-gradient(circle at 35% 20%, rgba(168, 85, 247, 0.45), transparent 22%),
+                    radial-gradient(circle at 70% 80%, rgba(56, 189, 248, 0.35), transparent 24%);
+  background-size: 220% 220%;
+  background-blend-mode: screen;
+  animation: heroGradientShift 20s ease-in-out infinite, heroGlowPulse 8s ease-in-out infinite alternate;
+}
+
+@keyframes heroGradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+    transform: translateX(0) rotate(30deg);
+  }
+
+  50% {
+    background-position: 100% 45%;
+    transform: translateX(-8%) rotate(33deg);
+  }
+}
+
+@keyframes heroGlowPulse {
+  0% {
+    filter: brightness(0.95);
+  }
+
+  100% {
+    filter: brightness(1.25);
+  }
+}
+
 .step-indicator-active {
   @apply bg-blue-600 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold;
 }
