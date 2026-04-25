@@ -12,6 +12,7 @@ import { ProjectProvider } from './contexts/ProjectContext';
 export default function App() {
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
   return (
     <BrowserRouter>
@@ -60,13 +61,19 @@ export default function App() {
                   ) : (
                     <>
                       <button 
-                        onClick={() => setIsAuthModalOpen(true)}
+                        onClick={() => {
+                          setAuthMode('login');
+                          setIsAuthModalOpen(true);
+                        }}
                         className="text-sm font-medium bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-full transition-colors"
                       >
                         Sign In
                       </button>
                       <button 
-                        onClick={() => setIsAuthModalOpen(true)}
+                        onClick={() => {
+                          setAuthMode('signup');
+                          setIsAuthModalOpen(true);
+                        }}
                         className="text-sm font-medium bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-full transition-all shadow-lg shadow-blue-900/40"
                       >
                         Join Free
@@ -80,7 +87,8 @@ export default function App() {
 
           <AuthModal 
             isOpen={isAuthModalOpen} 
-            onClose={() => setIsAuthModalOpen(false)} 
+            onClose={() => setIsAuthModalOpen(false)}
+            initialMode={authMode}
           />
 
           <main>
