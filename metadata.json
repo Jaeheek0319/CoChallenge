@@ -1,0 +1,6 @@
+{
+  "name": "ProjectCode",
+  "description": "AI-powered guided coding project platform. Generate custom coding lessons from prompts with an integrated IDE and live preview.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

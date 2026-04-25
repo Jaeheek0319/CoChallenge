@@ -1,0 +1,339 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import Editor from '@monaco-editor/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Play, RotateCcw, Save, Trash2, 
+  ChevronLeft, ChevronRight, HelpCircle, 
+  Layout, Code, Eye, MessageSquare, 
+  Sparkles, CheckCircle2, AlertCircle
+} from 'lucide-react';
+import { useProjects } from '../hooks/useProjects';
+import { UserProject, ProjectFile } from '../types';
+import { getAIHelp } from '../services/gemini';
+import { cn } from '../lib/utils';
+
+export function Workspace() {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const { getProject, saveProject } = useProjects();
+  
+  const [project, setProject] = useState<UserProject | null>(null);
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [showAI, setShowAI] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
+  const [userInput, setUserInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
+
+  useEffect(() => {
+    if (projectId) {
+      const p = getProject(projectId);
+      if (p) {
+        setProject(p);
+        setFiles(p.files);
+        setCurrentStep(p.currentStep || 0);
+      } else {
+        navigate('/');
+      }
+    }
+  }, [projectId]);
+
+  const handleRun = () => {
+    const htmlFile = files.find(f => f.name === 'index.html');
+    const cssFile = files.find(f => f.name === 'style.css');
+    const jsFile = files.find(f => f.name === 'script.js');
+
+    if (!htmlFile) return;
+
+    const combinedHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>${cssFile?.content || ''}</style>
+        </head>
+        <body>
+          ${htmlFile.content}
+          <script>${jsFile?.content || ''}</script>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([combinedHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    setPreviewUrl(url);
+  };
+
+  const handleFileChange = (value: string | undefined) => {
+    if (value === undefined) return;
+    const newFiles = [...files];
+    newFiles[activeFileIndex].content = value;
+    setFiles(newFiles);
+  };
+
+  const handleNextStep = () => {
+    if (project && currentStep < project.steps.length - 1) {
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      
+      // If the next step has starter code, apply it
+      const stepData = project.steps[nextStep];
+      if (stepData.starterCode) {
+        const newFiles = files.map(file => {
+          if (stepData.starterCode![file.name]) {
+            return { ...file, content: stepData.starterCode![file.name] };
+          }
+          return file;
+        });
+        setFiles(newFiles);
+      }
+      
+      saveProject({ ...project, currentStep: nextStep, files });
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleAIHelp = async () => {
+    if (!userInput.trim() || !project) return;
+    
+    setAiLoading(true);
+    setChatHistory(prev => [...prev, { role: 'user', text: userInput }]);
+    const currentCode = files.map(f => `// ${f.name}\n${f.content}`).join('\n\n');
+    const context = `User is on step ${currentStep + 1}: ${project.steps[currentStep].title}. Project: ${project.title}`;
+    
+    const input = userInput;
+    setUserInput('');
+
+    try {
+      const response = await getAIHelp(currentCode, input, context);
+      setChatHistory(prev => [...prev, { role: 'ai', text: response }]);
+    } catch (e) {
+      setChatHistory(prev => [...prev, { role: 'ai', text: "Sorry, I couldn't process that request." }]);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  if (!project) return null;
+
+  const activeFile = files[activeFileIndex];
+  const step = project.steps[currentStep];
+
+  return (
+    <div className="h-[calc(100vh-64px)] flex overflow-hidden bg-slate-950">
+      {/* Left Panel: Instructions */}
+      <div className="w-80 flex-shrink-0 border-r border-slate-800 bg-slate-900/30 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <h2 className="font-bold text-slate-200">Instructions</h2>
+          <div className="text-xs font-mono text-slate-500">
+            Step {currentStep + 1} / {project.steps.length}
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
+            <div className="prose prose-invert prose-sm">
+              <p className="text-slate-300 leading-relaxed">{step.explanation}</p>
+            </div>
+          </div>
+
+          <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-2 text-blue-400 mb-2">
+              <Code className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Your Task</span>
+            </div>
+            <p className="text-sm text-slate-200 leading-relaxed font-medium">{step.task}</p>
+          </div>
+
+          <div className="space-y-4">
+            <details className="group glass-panel rounded-lg overflow-hidden">
+              <summary className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors">
+                <span className="text-xs font-bold text-slate-400 group-open:text-blue-400">View Hint</span>
+                <HelpCircle className="w-4 h-4 text-slate-500 group-open:text-blue-400" />
+              </summary>
+              <div className="p-3 pt-0 text-sm text-slate-400 border-t border-slate-800/50 italic">
+                {step.hint}
+              </div>
+            </details>
+
+            <details className="group glass-panel rounded-lg overflow-hidden">
+              <summary className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors">
+                <span className="text-xs font-bold text-slate-400 group-open:text-green-400">See Solution</span>
+                <CheckCircle2 className="w-4 h-4 text-slate-500 group-open:text-green-400" />
+              </summary>
+              <div className="p-3 pt-0 text-sm font-mono bg-slate-900/50 border-t border-slate-800/50 whitespace-pre-wrap">
+                {step.solution}
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex items-center justify-between gap-3">
+          <button 
+            onClick={handlePrevStep}
+            disabled={currentStep === 0}
+            className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-30 transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          
+          <button 
+            onClick={handleNextStep}
+            disabled={currentStep === project.steps.length - 1}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
+          >
+            Next Step
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Middle Panel: Editor */}
+      <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800">
+        <div className="flex items-center justify-between px-4 h-12 bg-slate-900/50 border-b border-slate-800">
+          <div className="flex gap-2 h-full">
+            {files.map((file, idx) => (
+              <button
+                key={file.name}
+                onClick={() => setActiveFileIndex(idx)}
+                className={cn(
+                  "px-4 text-xs font-medium flex items-center gap-2 border-b-2 transition-all",
+                  activeFileIndex === idx 
+                    ? "border-blue-500 text-blue-400 bg-blue-500/5" 
+                    : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/30"
+                )}
+              >
+                <Code className="w-3.5 h-3.5" />
+                {file.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleRun}
+              className="flex items-center gap-2 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-md text-sm font-bold transition-all shadow-lg shadow-green-900/20 active:scale-95"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              Run
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 relative bg-[#1e1e1e]">
+          <Editor
+            height="100%"
+            language={activeFile?.language || 'javascript'}
+            value={activeFile?.content}
+            theme="vs-dark"
+            onChange={handleFileChange}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              fontFamily: '"JetBrains Mono", monospace',
+              padding: { top: 20 },
+              smoothScrolling: true,
+              cursorBlinking: "smooth",
+              lineNumbers: "on",
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Right Panel: Preview & AI */}
+      <div className="w-[400px] flex-shrink-0 flex flex-col bg-slate-900/30">
+        <div className="h-1/2 flex flex-col border-b border-slate-800">
+          <div className="p-3 border-b border-slate-800 flex items-center gap-2 text-slate-400">
+            <Eye className="w-4 h-4" />
+            <span className="text-xs font-bold uppercase tracking-widest">Live Preview</span>
+          </div>
+          <div className="flex-1 bg-white">
+            {previewUrl ? (
+              <iframe 
+                src={previewUrl} 
+                className="w-full h-full border-none"
+                title="preview"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-500 gap-4">
+                <Play className="w-12 h-12 opacity-10" />
+                <p className="text-sm font-medium">Click "Run" to see your code in action</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="h-1/2 flex flex-col overflow-hidden">
+          <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+            <div className="flex items-center gap-2 text-blue-400">
+              <Sparkles className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-widest">AI Tutor Helper</span>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            {chatHistory.length === 0 && (
+              <div className="text-center py-8">
+                <MessageSquare className="w-8 h-8 text-slate-800 mx-auto mb-3" />
+                <p className="text-xs text-slate-500 px-8">Ask the AI tutor for a hint, to explain your code, or to help you with the current step.</p>
+              </div>
+            )}
+            
+            {chatHistory.map((chat, idx) => (
+              <div 
+                key={idx} 
+                className={cn(
+                  "p-3 rounded-xl text-sm max-w-[85%]",
+                  chat.role === 'user' 
+                    ? "bg-blue-600 ml-auto text-white" 
+                    : "bg-slate-800 border border-slate-700 mr-auto text-slate-300"
+                )}
+              >
+                {chat.text}
+              </div>
+            ))}
+            
+            {aiLoading && (
+              <div className="bg-slate-800 border border-slate-700 mr-auto p-3 rounded-xl flex gap-1 items-center">
+                <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-slate-800 bg-slate-900/70">
+            <div className="relative flex gap-2">
+              <input
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAIHelp()}
+                placeholder="Ask your AI tutor..."
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <button 
+                onClick={handleAIHelp}
+                disabled={aiLoading || !userInput.trim()}
+                className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition-colors"
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
