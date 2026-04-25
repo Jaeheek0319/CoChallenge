@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useProjects } from '../hooks/useProjects';
-import { Clock, CheckCircle, Code2, Trash2, ArrowRight } from 'lucide-react';
+import { Clock, CheckCircle, Code2, Trash2, ArrowRight, Plus } from 'lucide-react';
 
 export function Dashboard() {
   const { projects, loading } = useProjects();
@@ -48,6 +48,23 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-slate-900 rounded-3xl overflow-hidden hover:bg-slate-800 transition-all cursor-pointer group"
+            style={{
+              border: '4px dashed #52525b',
+              borderRadius: '24px'
+            }}
+            onClick={() => navigate('/')}
+          >
+            <div className="p-6 h-full flex flex-col items-center justify-center min-h-[280px]">
+              <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4 group-hover:bg-slate-600 transition-colors">
+                <Plus className="w-8 h-8 text-slate-300" />
+              </div>
+              <h3 className="text-lg font-bold text-center text-slate-200 group-hover:text-white transition-colors">Make a New Project</h3>
+            </div>
+          </motion.div>
           {projects.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((project, idx) => {
             const progress = Math.round(((project.currentStep + 1) / project.steps.length) * 100);
             
