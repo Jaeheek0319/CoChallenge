@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
 import { Challenges } from './pages/Challenges';
+import { Profile } from './pages/Profile';
 import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Code2, Layout, Globe, LogOut, Sparkles, User } from 'lucide-react';
@@ -15,6 +16,22 @@ export default function App() {
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
     <BrowserRouter>
@@ -53,20 +70,37 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+<div className="flex items-center gap-4" ref={profileMenuRef}>
                   {user ? (
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <div className="relative flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsProfileMenuOpen((open) => !open)}
+                        className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                      >
                         <User className="w-4 h-4 text-blue-400" />
                         <span className="hidden sm:inline">{user.email?.split('@')[0]}</span>
-                      </div>
-                      <button 
+                      </button>
+                      <button
+                        type="button"
                         onClick={signOut}
                         className="p-2 text-slate-400 hover:text-red-400 transition-colors"
                         title="Sign Out"
                       >
                         <LogOut className="w-5 h-5" />
                       </button>
+
+                      {isProfileMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-slate-800 bg-slate-950 shadow-xl shadow-black/30 z-20">
+                          <Link
+                            to="/profile"
+                            onClick={() => setIsProfileMenuOpen(false)}
+                            className="block px-4 py-3 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
+                          >
+                            View Profile
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -109,6 +143,7 @@ export default function App() {
               <Route path="/generation" element={<Generation />} />
               <Route path="/challenges" element={<Challenges />} />
               <Route path="/school" element={<School />} />
+              <Route path="/profile" element={<Profile />} />
             </Routes>
           </main>
         </div>
