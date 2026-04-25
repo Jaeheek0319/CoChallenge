@@ -3,9 +3,10 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
-import { Gallery } from './pages/Gallery';
+import { Challenges } from './pages/Challenges';
 import { School } from './pages/School';
-import { Code2, Layout, Globe, LogOut, User } from 'lucide-react';
+import { Generation } from './pages/Generation';
+import { Code2, Layout, Globe, LogOut, Sparkles, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { ProjectProvider } from './contexts/ProjectContext';
@@ -33,9 +34,13 @@ export default function App() {
                   </Link>
                   
                   <div className="hidden md:flex items-center gap-6">
-                    <Link to="/gallery" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                    <Link to="/generation" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4" />
+                      Generation
+                    </Link>
+                    <Link to="/challenges" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <Globe className="w-4 h-4" />
-                      Gallery
+                      Challenges
                     </Link>
                     <Link to="/school" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <Globe className="w-4 h-4" />
@@ -101,7 +106,8 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/workspace/:projectId" element={<Workspace />} />
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/gallery" element={<Gallery />} />
+              <Route path="/generation" element={<Generation />} />
+              <Route path="/challenges" element={<Challenges />} />
               <Route path="/school" element={<School />} />
             </Routes>
           </main>

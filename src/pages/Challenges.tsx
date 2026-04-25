@@ -60,7 +60,7 @@ const PRESET_PROJECTS = [
   }
 ];
 
-export function Gallery() {
+export function Challenges() {
   const navigate = useNavigate();
 
   return (
@@ -71,7 +71,7 @@ export function Gallery() {
             <Globe className="w-4 h-4" />
             Curated Community
           </div>
-          <h1 className="text-4xl font-bold mb-2">Project Gallery</h1>
+          <h1 className="text-4xl font-bold mb-2">Project Challenges</h1>
           <p className="text-slate-400 font-medium">Explore hand-picked project ideas to kickstart your coding journey. Pick one and our AI will build a personalized lesson for it.</p>
         </div>
         
