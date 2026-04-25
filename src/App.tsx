@@ -29,7 +29,7 @@ export default function App() {
                       <Code2 className="w-5 h-5 text-white" />
                     </div>
                     <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                      ProjectCode
+                      CoChallengers
                     </span>
                   </Link>
                   
