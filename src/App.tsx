@@ -4,6 +4,7 @@ import { Home } from './pages/Home';
 import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
 import { Gallery } from './pages/Gallery';
+import { School } from './pages/School';
 import { Code2, Layout, Globe, LogOut, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
@@ -35,6 +36,10 @@ export default function App() {
                     <Link to="/gallery" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <Globe className="w-4 h-4" />
                       Gallery
+                    </Link>
+                    <Link to="/school" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                      <Globe className="w-4 h-4" />
+                      School
                     </Link>
                     <Link to="/dashboard" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <Layout className="w-4 h-4" />
@@ -97,6 +102,7 @@ export default function App() {
               <Route path="/workspace/:projectId" element={<Workspace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/gallery" element={<Gallery />} />
+              <Route path="/school" element={<School />} />
             </Routes>
           </main>
         </div>
