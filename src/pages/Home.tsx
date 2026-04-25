@@ -13,12 +13,26 @@ export function Home() {
   const [language, setLanguage] = useState<Language>('html-css-js');
   const [difficulty, setDifficulty] = useState<Difficulty>('Beginner');
   const [loading, setLoading] = useState(false);
+  const [useTestData, setUseTestData] = useState(false);
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() && !useTestData) return;
     setLoading(true);
     try {
-      const project = await generateProject(prompt, language, difficulty);
+      let project;
+      if (useTestData) {
+        const res = await fetch('/test_data/project.json');
+        if (!res.ok) throw new Error("Failed to load test data");
+        const data = await res.json();
+        project = {
+          ...data,
+          id: Math.random().toString(36).substring(7),
+          language,
+          difficulty
+        };
+      } else {
+        project = await generateProject(prompt, language, difficulty);
+      }
       saveProject({ ...project, currentStep: 0, updatedAt: new Date().toISOString() });
       navigate(`/workspace/${project.id}`);
     } catch (error) {
@@ -115,11 +129,23 @@ export function Home() {
                       <option value="Advanced">Advanced</option>
                     </select>
                   </div>
+                  
+                  <div className="flex flex-col items-start gap-1 ml-4 mt-5">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useTestData}
+                        onChange={(e) => setUseTestData(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
+                      />
+                      <span className="text-sm font-medium text-slate-300">Use test data (bypass API)</span>
+                    </label>
+                  </div>
                 </div>
 
                 <button
                   onClick={handleGenerate}
-                  disabled={loading || !prompt.trim()}
+                  disabled={loading || (!prompt.trim() && !useTestData)}
                   className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] active:scale-95"
                 >
                   {loading ? (

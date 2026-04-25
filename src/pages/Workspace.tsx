@@ -16,7 +16,7 @@ import { cn } from '../lib/utils';
 export function Workspace() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { getProject, saveProject } = useProjects();
+  const { projects, loading, saveProject } = useProjects();
   
   const [project, setProject] = useState<UserProject | null>(null);
   const [activeFileIndex, setActiveFileIndex] = useState(0);
@@ -30,17 +30,34 @@ export function Workspace() {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
 
   useEffect(() => {
+    if (loading) return;
+    
     if (projectId) {
-      const p = getProject(projectId);
+      const p = projects.find(proj => proj.id === projectId);
       if (p) {
         setProject(p);
-        setFiles(p.files);
-        setCurrentStep(p.currentStep || 0);
+        
+        const stepIndex = p.currentStep || 0;
+        let initialFiles = p.files;
+        const stepData = p.steps[stepIndex];
+        
+        // Apply starter code for the current step if it exists
+        if (stepData && stepData.starterCode) {
+          initialFiles = initialFiles.map(file => {
+            if (stepData.starterCode![file.name]) {
+              return { ...file, content: stepData.starterCode![file.name] };
+            }
+            return file;
+          });
+        }
+        
+        setFiles(initialFiles);
+        setCurrentStep(stepIndex);
       } else {
         navigate('/');
       }
     }
-  }, [projectId]);
+  }, [projectId, loading, projects, navigate]);
 
   const handleRun = () => {
     const htmlFile = files.find(f => f.name === 'index.html');

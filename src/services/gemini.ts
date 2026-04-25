@@ -41,6 +41,7 @@ export async function generateProject(prompt: string, language: Language, diffic
   }
 
   const fullPrompt = `Topic: ${prompt}\nLanguage: ${language}\nDifficulty: ${difficulty}`;
+  console.log("Sent prompt");
 
   const result = await genAI.models.generateContent({
     model: "gemini-2.5-flash",
@@ -55,6 +56,8 @@ export async function generateProject(prompt: string, language: Language, diffic
   
   const finalContent = text || (response as any).content?.parts?.[0]?.text;
   
+  console.log("Gemini Project Generation Response:", finalContent);
+
   try {
     const data = JSON.parse(finalContent);
     return {
