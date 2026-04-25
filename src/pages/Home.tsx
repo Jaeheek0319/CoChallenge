@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Sparkles, Code, BrainCircuit, Rocket, ChevronRight, PlayCircle } from 'lucide-react';
 import { generateProject } from '../services/gemini';
 import { Language, Difficulty } from '../types';
 import { useProjects } from '../hooks/useProjects';
+
+const suggestionExamples = [
+  'Teach me how to build a weather dashboard',
+  'Teach me how to build a drawing app',
+  'Teach me how to build a recipe finder',
+  'Teach me how to build a portfolio website',
+  'Teach me how to build a memory game',
+];
 
 export function Home() {
   const navigate = useNavigate();
@@ -14,6 +22,10 @@ export function Home() {
   const [difficulty, setDifficulty] = useState<Difficulty>('Beginner');
   const [loading, setLoading] = useState(false);
   const [useTestData, setUseTestData] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState<number>(0);
+  const [isDeletingPrompt, setIsDeletingPrompt] = useState(false);
+  const [isPromptAnimationActive, setIsPromptAnimationActive] = useState(!window.history.state?.usr?.presetPrompt);
+  const animationPaused = useRef(false);
 
   const handleGenerate = async () => {
     if (!prompt.trim() && !useTestData) return;
@@ -40,6 +52,47 @@ export function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (!isPromptAnimationActive || animationPaused.current) return;
+
+    const currentSuggestion = suggestionExamples[suggestionIndex];
+    const isComplete = prompt === currentSuggestion;
+    const shouldDelete = isDeletingPrompt || isComplete;
+    const baseDelay = shouldDelete ? 40 : 80;
+    const pauseDelay = isComplete ? 1200 : baseDelay;
+
+    const timeoutId = window.setTimeout(() => {
+      if (isComplete && !isDeletingPrompt) {
+        setIsDeletingPrompt(true);
+        return;
+      }
+
+      if (shouldDelete) {
+        const nextText = currentSuggestion.slice(0, Math.max(0, prompt.length - 1));
+        setPrompt(nextText);
+        if (nextText.length === 0) {
+          setIsDeletingPrompt(false);
+          setSuggestionIndex((prev) => (prev + 1) % suggestionExamples.length);
+        }
+      } else {
+        setPrompt(currentSuggestion.slice(0, prompt.length + 1));
+      }
+    }, pauseDelay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [prompt, suggestionIndex, isDeletingPrompt, isPromptAnimationActive]);
+
+  const stopPromptAnimation = () => {
+    animationPaused.current = true;
+    setIsPromptAnimationActive(false);
+  };
+
+  const resumePromptAnimation = () => {
+    if (prompt.trim()) return;
+    animationPaused.current = false;
+    setIsPromptAnimationActive(true);
   };
 
   const examples = [
@@ -96,9 +149,14 @@ export function Home() {
               <div className="relative border-b border-slate-800/50 pb-4">
                 <textarea
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="What do you want to build? (e.g. A budget tracker in JavaScript)"
-                  className="w-full bg-transparent border-none focus:ring-0 text-lg text-white placeholder-slate-500 resize-none h-24"
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                    stopPromptAnimation();
+                    setPrompt(e.target.value);
+                  }}
+                  onFocus={stopPromptAnimation}
+                  onBlur={resumePromptAnimation}
+                  placeholder="What do you want to build?"
+                  className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-300 placeholder-slate-500 resize-none h-24"
                 />
               </div>
               
@@ -108,7 +166,7 @@ export function Home() {
                     <span className="text-[10px] uppercase font-bold text-slate-500 ml-1 tracking-wider">Language</span>
                     <select
                       value={language}
-                      onChange={(e) => setLanguage(e.target.value as Language)}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLanguage(e.target.value as Language)}
                       className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                     >
                       <option value="html-css-js">JavaScript (Web)</option>
@@ -121,7 +179,7 @@ export function Home() {
                     <span className="text-[10px] uppercase font-bold text-slate-500 ml-1 tracking-wider">Difficulty</span>
                     <select
                       value={difficulty}
-                      onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDifficulty(e.target.value as Difficulty)}
                       className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                     >
                       <option value="Beginner">Beginner</option>
@@ -135,7 +193,7 @@ export function Home() {
                       <input
                         type="checkbox"
                         checked={useTestData}
-                        onChange={(e) => setUseTestData(e.target.checked)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUseTestData(e.target.checked)}
                         className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
                       />
                       <span className="text-sm font-medium text-slate-300">Use test data (bypass API)</span>
