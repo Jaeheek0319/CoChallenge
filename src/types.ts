@@ -9,6 +9,7 @@ export interface ProjectFile {
 
 export interface LessonStep {
   title: string;
+  lesson?: string;
   explanation: string;
   task: string;
   hint: string;
