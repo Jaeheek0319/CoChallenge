@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Globe, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User } from 'lucide-react';
+import { Globe, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search } from 'lucide-react';
 
 const FEATURED_CHALLENGES = [
   {
@@ -100,6 +100,21 @@ const COMMUNITY_CHALLENGES = [
 export function Challenges() {
   const navigate = useNavigate();
   const carouselRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredFeatured = FEATURED_CHALLENGES.filter(c => {
+    const query = searchQuery.toLowerCase();
+    return c.title.toLowerCase().includes(query) || 
+           c.company.toLowerCase().includes(query) ||
+           c.tags.some(t => t.toLowerCase().includes(query));
+  });
+
+  const filteredCommunity = COMMUNITY_CHALLENGES.filter(c => {
+    const query = searchQuery.toLowerCase();
+    return c.title.toLowerCase().includes(query) || 
+           c.author.toLowerCase().includes(query) ||
+           c.tags.some(t => t.toLowerCase().includes(query));
+  });
 
   const scrollLeft = () => {
     if (carouselRef.current) {
@@ -127,6 +142,20 @@ export function Challenges() {
             Tackle challenges posted by top companies or explore our community-driven project ideas. 
             Pick one and our AI will guide you through building it.
           </p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="w-full md:w-72 relative group">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search challenges, tags, users..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all"
+          />
         </div>
       </div>
 
@@ -163,7 +192,7 @@ export function Challenges() {
           className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {FEATURED_CHALLENGES.map((challenge, idx) => (
+          {filteredFeatured.map((challenge, idx) => (
             <motion.div
               key={challenge.id}
               initial={{ opacity: 0, x: 20 }}
@@ -228,7 +257,7 @@ export function Challenges() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {COMMUNITY_CHALLENGES.map((challenge, idx) => (
+          {filteredCommunity.map((challenge, idx) => (
             <motion.div
               key={challenge.id}
               initial={{ opacity: 0, y: 20 }}

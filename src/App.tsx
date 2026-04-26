@@ -62,10 +62,7 @@ export default function App() {
                       <Globe className="w-4 h-4" />
                       School
                     </Link>
-                    <Link to="/dashboard" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                      <Layout className="w-4 h-4" />
-                      My Learning
-                    </Link>
+
                   </div>
                 </div>
 
