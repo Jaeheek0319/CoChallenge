@@ -4,10 +4,10 @@ import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Play, RotateCcw, Save, Trash2, 
-  ChevronLeft, ChevronRight, HelpCircle, 
-  Layout, Code, Eye, MessageSquare, 
+import {
+  Play, RotateCcw, Save, Trash2,
+  ChevronLeft, ChevronRight, HelpCircle,
+  Layout, Code, Eye, MessageSquare,
   Sparkles, CheckCircle2, AlertCircle, Terminal, Github, Loader2,
   BookOpen
 
@@ -19,24 +19,18 @@ import { UserProject, ProjectFile } from '../types';
 import { getAIHelp, checkStepCompletion } from '../services/gemini';
 import { cn } from '../lib/utils';
 import { io, Socket } from 'socket.io-client';
-<<<<<<< HEAD
-import { XTerm } from '../components/XTerm';
-import { Notification } from '../components/Notification';
-import { LessonModal } from '../components/LessonModal';
-=======
 import { XTerm } from '../components/XTerm';
 import { Notification } from '../components/Notification';
 import { LessonModal } from '../components/LessonModal';
 import { CongratulationsModal } from '../components/CongratulationsModal';
 import confetti from 'canvas-confetti';
->>>>>>> 5ab57420638ce6563d5eec3f100cb0066dd4b9d8
 
 
 export function Workspace() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { projects, loading, saveProject } = useProjects();
-  
+
   const [project, setProject] = useState<UserProject | null>(null);
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [files, setFiles] = useState<ProjectFile[]>([]);
@@ -49,27 +43,17 @@ export function Workspace() {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [stepFeedback, setStepFeedback] = useState<{isComplete: boolean, message: string} | null>(null);
+  const [stepFeedback, setStepFeedback] = useState<{ isComplete: boolean, message: string } | null>(null);
   const [consoleOutput, setConsoleOutput] = useState<string>('');
-<<<<<<< HEAD
   const [isPyodideReady, setIsPyodideReady] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
-  const [showLessonModal, setShowLessonModal] = useState(false);
-
-
-
-=======
-  const [isPyodideReady, setIsPyodideReady] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' } | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
 
 
 
 
->>>>>>> 5ab57420638ce6563d5eec3f100cb0066dd4b9d8
 
 
   const lastLoadedProjectId = useRef<string | null>(null);
@@ -120,18 +104,18 @@ export function Workspace() {
 
   useEffect(() => {
     if (loading) return;
-    
+
     if (projectId) {
       const p = projects.find(proj => proj.id === projectId);
       if (p) {
         setProject(p);
-        
+
         // Only initialize state if we're loading a DIFFERENT project
         if (lastLoadedProjectId.current !== projectId) {
           const stepIndex = p.currentStep || 0;
           let initialFiles = p.files;
           const stepData = p.steps[stepIndex];
-          
+
           // Apply starter code for the current step if it exists
           if (stepData && stepData.starterCode) {
             initialFiles = initialFiles.map(file => {
@@ -141,17 +125,17 @@ export function Workspace() {
               return file;
             });
           }
-          
+
           setFiles(initialFiles);
           setCurrentStep(stepIndex);
-          
+
           // Mark all previous steps as completed
           const completed = [];
           for (let i = 0; i < stepIndex; i++) {
             completed.push(i);
           }
           setCompletedSteps(completed);
-          
+
           setStepFeedback(null);
           lastLoadedProjectId.current = projectId;
 
@@ -204,18 +188,18 @@ export function Workspace() {
       const isCpp = project.language === 'cpp';
       const fileName = isCpp ? 'main.cpp' : 'main.c';
       const codeFile = files.find(f => f.name === fileName);
-      
+
       if (!codeFile) {
         if ((window as any).writeToTerminal) {
           (window as any).writeToTerminal(`\r\nError: ${fileName} not found.\r\n`);
         }
         return;
       }
-      
+
       if ((window as any).clearTerminal) {
         (window as any).clearTerminal();
       }
-      
+
       if (socketRef.current) {
         socketRef.current.emit('execute_code', {
           language: project.language,
@@ -228,21 +212,21 @@ export function Workspace() {
     if (project?.language === 'python') {
       const pythonFile = files.find(f => f.name === 'main.py');
       if (!pythonFile) return;
-      
+
       if (!pyodideRef.current) {
         if ((window as any).writeToTerminal) {
           (window as any).writeToTerminal("\r\nPython environment is still loading...\r\n");
         }
         return;
       }
-      
+
       if ((window as any).clearTerminal) {
         (window as any).clearTerminal();
       }
-      
+
       try {
         const pyodide = pyodideRef.current;
-        
+
         // Let's implement real-time stdout streaming by overriding sys.stdout
         await pyodide.runPythonAsync(`
 import sys
@@ -267,13 +251,13 @@ async def async_input(prompt=""):
 import builtins
 builtins.input = async_input
         `);
-        
+
         // Transform the user's code to make 'input()' calls awaitable
         // This allows synchronous-looking code to run in our async terminal environment
         const transformedCode = pythonFile.content.replace(/\binput\s*\(/g, 'await input(');
         await pyodide.runPythonAsync(transformedCode);
         if ((window as any).writeToTerminal) {
-           (window as any).writeToTerminal('\r\n[Process exited]\r\n');
+          (window as any).writeToTerminal('\r\n[Process exited]\r\n');
         }
       } catch (e: any) {
         if ((window as any).writeToTerminal) {
@@ -325,7 +309,7 @@ builtins.input = async_input
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
       setStepFeedback(null);
-      
+
       // If the next step has starter code, apply it
       const stepData = project.steps[nextStep];
       if (stepData.starterCode) {
@@ -337,7 +321,7 @@ builtins.input = async_input
         });
         setFiles(newFiles);
       }
-      
+
       saveProject({ ...project, currentStep: Math.max(project.currentStep, nextStep), files });
 
       if (project.steps[nextStep]?.lesson) {
@@ -355,12 +339,12 @@ builtins.input = async_input
 
   const handleAIHelp = async () => {
     if (!userInput.trim() || !project) return;
-    
+
     setAiLoading(true);
     setChatHistory(prev => [...prev, { role: 'user', text: userInput }]);
     const currentCode = files.map(f => `// ${f.name}\n${f.content}`).join('\n\n');
     const context = `User is on step ${currentStep + 1}: ${project.steps[currentStep].title}. Project: ${project.title}`;
-    
+
     const input = userInput;
     setUserInput('');
 
@@ -376,10 +360,10 @@ builtins.input = async_input
 
   const handleCheckStep = async () => {
     if (!project) return;
-    
+
     setIsChecking(true);
     setStepFeedback(null);
-    
+
     const currentCode = files.map(f => `// ${f.name}\n${f.content}`).join('\n\n');
     const stepData = project.steps[currentStep];
 
@@ -391,7 +375,7 @@ builtins.input = async_input
       });
       if (result.isComplete) {
         setCompletedSteps(prev => Array.from(new Set([...prev, currentStep])));
-        
+
         // Show celebratory modal if this was the last step
         if (currentStep === project.steps.length - 1) {
           setTimeout(() => {
@@ -418,9 +402,9 @@ builtins.input = async_input
   const handleExport = async () => {
     if (!project || isExporting) return;
     setIsExporting(true);
-    
+
     try {
-      const res = await api.post<{success: boolean, url: string}>(`/api/projects/${projectId}/export`, {});
+      const res = await api.post<{ success: boolean, url: string }>(`/api/projects/${projectId}/export`, {});
       if (res.success) {
         setNotification({ message: 'Project created in the repo', type: 'success' });
         window.open(res.url, '_blank');
@@ -464,7 +448,7 @@ builtins.input = async_input
         onExport={handleExport}
         projectTitle={project.title}
       />
-      <Notification 
+      <Notification
         isVisible={!!notification}
         message={notification?.message || ''}
         type={notification?.type}
@@ -488,7 +472,7 @@ builtins.input = async_input
             <span className="relative -top-[1px]">Step {currentStep + 1} / {project.steps.length}</span>
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
           <div className="mb-6">
             <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
@@ -553,25 +537,25 @@ builtins.input = async_input
               </div>
             </div>
           )}
-          
+
           <div className="flex items-center justify-between gap-3">
-            <button 
+            <button
               onClick={handlePrevStep}
               disabled={currentStep === 0}
               className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-30 transition-colors"
             >
               <ChevronLeft className="w-6 h-6" />
             </button>
-            
+
             <div className="flex-1 flex gap-2">
-              <button 
+              <button
                 onClick={handleCheckStep}
                 disabled={isChecking}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
               >
                 {isChecking ? 'Checking...' : 'Check'}
               </button>
-              <button 
+              <button
                 onClick={handleNextStep}
                 disabled={currentStep === project.steps.length - 1 || !completedSteps.includes(currentStep)}
                 className={cn(
@@ -599,8 +583,8 @@ builtins.input = async_input
                 onClick={() => setActiveFileIndex(idx)}
                 className={cn(
                   "px-4 text-xs font-medium flex items-center gap-2 border-b-2 transition-all",
-                  activeFileIndex === idx 
-                    ? "border-blue-500 text-blue-400 bg-blue-500/5" 
+                  activeFileIndex === idx
+                    ? "border-blue-500 text-blue-400 bg-blue-500/5"
                     : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/30"
                 )}
               >
@@ -612,7 +596,7 @@ builtins.input = async_input
 
           <div className="flex items-center gap-3">
             {currentStep === project.steps.length - 1 && (
-              <button 
+              <button
                 onClick={handleExport}
                 disabled={isExporting}
                 className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-md text-sm font-bold transition-all active:scale-95 disabled:opacity-50"
@@ -626,7 +610,7 @@ builtins.input = async_input
               </button>
             )}
 
-            <button 
+            <button
               onClick={handleRun}
               className="flex items-center gap-2 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-md text-sm font-bold transition-all shadow-lg shadow-green-900/20 active:scale-95"
             >
@@ -654,7 +638,7 @@ builtins.input = async_input
 
                   const match = textBeforeCursor.match(/<([a-zA-Z0-9\-]+)[^>]*>$/);
                   if (!match) return;
-                  
+
                   const tagName = match[1];
                   const isSelfClosing = /<\s*[a-zA-Z0-9\-]+[^>]*\/\s*>$/.test(textBeforeCursor);
                   if (isSelfClosing) return;
@@ -710,15 +694,15 @@ builtins.input = async_input
                     Initializing Python Environment...
                   </div>
                 )}
-                <XTerm 
-                  socket={project.language !== 'python' ? socketRef.current : undefined} 
+                <XTerm
+                  socket={project.language !== 'python' ? socketRef.current : undefined}
                   onInput={project.language === 'python' ? handleTerminalInput : undefined}
                 />
               </div>
             ) : previewUrl ? (
               <div className="w-full h-full overflow-hidden bg-white relative">
-                <iframe 
-                  src={previewUrl} 
+                <iframe
+                  src={previewUrl}
                   className="border-none absolute top-0 left-0 origin-top-left"
                   style={{
                     width: '200%',
@@ -744,7 +728,7 @@ builtins.input = async_input
               <span className="text-xs font-bold uppercase tracking-widest">AI Tutor Helper</span>
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
             {chatHistory.length === 0 && (
               <div className="text-center py-8">
@@ -752,14 +736,14 @@ builtins.input = async_input
                 <p className="text-xs text-slate-500 px-8">Ask the AI tutor for a hint, to explain your code, or to help you with the current step.</p>
               </div>
             )}
-            
+
             {chatHistory.map((chat, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className={cn(
                   "p-3 rounded-xl text-sm max-w-[85%]",
-                  chat.role === 'user' 
-                    ? "bg-blue-600 ml-auto text-white" 
+                  chat.role === 'user'
+                    ? "bg-blue-600 ml-auto text-white"
                     : "bg-slate-800 border border-slate-700 mr-auto text-slate-300"
                 )}
               >
@@ -773,7 +757,7 @@ builtins.input = async_input
                 </div>
               </div>
             ))}
-            
+
             {aiLoading && (
               <div className="bg-slate-800 border border-slate-700 mr-auto p-3 rounded-xl flex gap-1 items-center">
                 <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" />
@@ -793,7 +777,7 @@ builtins.input = async_input
                 placeholder="Ask your AI tutor..."
                 className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               />
-              <button 
+              <button
                 onClick={handleAIHelp}
                 disabled={aiLoading || !userInput.trim()}
                 className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition-colors"
