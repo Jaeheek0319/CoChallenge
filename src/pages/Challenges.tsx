@@ -271,7 +271,10 @@ export function Challenges() {
         <Code className="w-12 h-12 text-slate-800 mx-auto mb-4" />
         <h2 className="text-2xl font-bold mb-2">Have a challenge idea?</h2>
         <p className="text-slate-500 mb-8 max-w-sm mx-auto">Create and share your own coding challenges with the community.</p>
-        <button className="bg-white text-slate-950 hover:bg-slate-200 px-8 py-3 rounded-xl font-bold transition-all active:scale-95">
+        <button 
+          onClick={() => navigate('/create-challenge')}
+          className="bg-white text-slate-950 hover:bg-slate-200 px-8 py-3 rounded-xl font-bold transition-all active:scale-95"
+        >
           Submit Challenge
         </button>
       </div>
