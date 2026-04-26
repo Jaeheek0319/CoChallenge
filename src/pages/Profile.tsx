@@ -14,12 +14,12 @@ import {
   AtSign,
   Check,
   AlertCircle,
-  Trophy,
 } from 'lucide-react';
 import { profileApi } from '../lib/profileApi';
 import { api } from '../lib/api';
 import { uploadAvatar, deleteAvatar } from '../lib/avatarApi';
 import { AvatarCropModal } from '../components/AvatarCropModal';
+import { EloRankBadge } from '../components/EloRankBadge';
 import type { UserProfile } from '../types';
 
 const emailPrefix = (email: string | null | undefined) =>
@@ -270,9 +270,8 @@ export function Profile() {
             <p className="text-xs text-slate-400">@{profile.username}</p>
           )}
           {profile && (
-            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-200">
-              <Trophy className="w-3.5 h-3.5" />
-              {profile.elo} elo
+            <div className="mt-3">
+              <EloRankBadge elo={profile.elo} overallRank={profile.globalRank} />
             </div>
           )}
         </div>

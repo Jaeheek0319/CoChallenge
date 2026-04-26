@@ -43,6 +43,7 @@ export interface UserProfile {
   twitterUrl: string;
   githubAccessToken?: string;
   elo: number;
+  globalRank?: number;
   updatedAt: string;
 }
 
