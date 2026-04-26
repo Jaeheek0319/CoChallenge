@@ -41,6 +41,7 @@ export interface UserProfile {
   githubUrl: string;
   twitterUrl: string;
   githubAccessToken?: string;
+  elo: number;
   updatedAt: string;
 }
 

@@ -54,7 +54,7 @@ export function ProjectDial({ projects = [] }: ProjectDialProps) {
   const mediumEnd = easyEnd + mediumAngle;
 
   return (
-    <div className="glass-panel rounded-3xl pt-7 pb-7 px-4">
+    <div className="glass-panel rounded-3xl pt-[2.875rem] pb-[2.875rem] px-4">
       <div className="flex items-center justify-between">
         {/* Dial Section - Semi-circle */}
         <div className="relative w-42 h-24 flex items-center justify-center">

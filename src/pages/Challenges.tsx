@@ -22,6 +22,8 @@ interface ApiChallenge {
   verified: boolean;
   logoUrl: string | null;
   likes: number;
+  dueDate: string;
+  state: 'open' | 'closed' | 'graded';
   createdAt: string;
 }
 
@@ -29,6 +31,9 @@ const FALLBACK_LOGO_GRADIENT = 'from-slate-700 to-slate-900';
 
 function toPreviewState(c: ApiChallenge) {
   return {
+    challengeId: c.id,
+    state: c.state,
+    dueDate: c.dueDate,
     title: c.title,
     description: c.description,
     difficulty: c.difficulty,
