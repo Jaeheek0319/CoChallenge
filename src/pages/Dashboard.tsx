@@ -4,6 +4,8 @@ import { motion } from 'motion/react';
 import { useProjects } from '../hooks/useProjects';
 import { Clock, CheckCircle, Trophy, Trash2, ArrowRight, Plus, MoreVertical, Github, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { Notification } from '../components/Notification';
+
 
 type FilterType = 'all' | 'completed' | 'in-progress';
 
@@ -12,6 +14,9 @@ export function Dashboard() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+
+
 
   const handleExport = async (projectId: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -23,11 +28,18 @@ export function Dashboard() {
     try {
       const res = await api.post<{success: boolean, url: string}>(`/api/projects/${projectId}/export`, {});
       if (res.success) {
+        setNotification({ message: 'Project created in the repo', type: 'success' });
         window.open(res.url, '_blank');
       }
     } catch (err: any) {
-      alert(err.message || 'Export failed. Ensure you are connected to GitHub in your Profile.');
+      if (err.message && err.message.includes('already exists')) {
+        setNotification({ message: 'Project already exists in your repo', type: 'info' });
+      } else {
+        alert(err.message || 'Export failed. Ensure you are connected to GitHub in your Profile.');
+      }
     } finally {
+
+
       setExportingId(null);
     }
   };
@@ -50,6 +62,14 @@ export function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
+      <Notification 
+        isVisible={!!notification}
+        message={notification?.message || ''}
+        type={notification?.type}
+        onClose={() => setNotification(null)}
+      />
+
+
       <div className="flex items-center justify-between mb-12">
         <div>
           <h1 className="text-4xl font-bold mb-2">My Learning Journey</h1>
@@ -212,7 +232,11 @@ export function Dashboard() {
                     </div>
                     <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-blue-600 transition-all duration-1000"
+                        className={`h-full transition-all duration-1000 ${
+                          progress === 100 
+                            ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' 
+                            : 'bg-blue-600'
+                        }`}
                         style={{ width: `${progress}%` }}
                       />
                     </div>
