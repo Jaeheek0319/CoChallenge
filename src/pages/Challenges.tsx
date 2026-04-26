@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Globe, Heart, Users, ArrowRight, BadgeCheck, Building2, ChevronRight, ChevronLeft, User } from 'lucide-react';
+import { Globe, Heart, Users, ArrowRight, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search, ChevronDown } from 'lucide-react';
 
 const FEATURED_CHALLENGES = [
   {
@@ -100,6 +100,40 @@ const COMMUNITY_CHALLENGES = [
 export function Challenges() {
   const navigate = useNavigate();
   const carouselRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilter, setSearchFilter] = useState('All');
+
+  const filteredFeatured = FEATURED_CHALLENGES.filter(c => {
+    const query = searchQuery.toLowerCase();
+    if (!query) return true;
+
+    const matchesTitle = c.title.toLowerCase().includes(query);
+    const matchesUser = c.company.toLowerCase().includes(query);
+    const matchesTag = c.tags.some(t => t.toLowerCase().includes(query));
+
+    switch (searchFilter) {
+      case 'Title': return matchesTitle;
+      case 'User': return matchesUser;
+      case 'Tag': return matchesTag;
+      default: return matchesTitle || matchesUser || matchesTag;
+    }
+  });
+
+  const filteredCommunity = COMMUNITY_CHALLENGES.filter(c => {
+    const query = searchQuery.toLowerCase();
+    if (!query) return true;
+
+    const matchesTitle = c.title.toLowerCase().includes(query);
+    const matchesUser = c.author.toLowerCase().includes(query);
+    const matchesTag = c.tags.some(t => t.toLowerCase().includes(query));
+
+    switch (searchFilter) {
+      case 'Title': return matchesTitle;
+      case 'User': return matchesUser;
+      case 'Tag': return matchesTag;
+      default: return matchesTitle || matchesUser || matchesTag;
+    }
+  });
 
   const scrollLeft = () => {
     if (carouselRef.current) {
@@ -136,6 +170,37 @@ export function Challenges() {
         </button>
       </div>
 
+      {/* Search Bar & Filters */}
+      <div className="mb-12 flex flex-col sm:flex-row gap-4">
+        <div className="w-full relative group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search challenges..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all text-lg"
+          />
+        </div>
+        <div className="sm:w-48 relative shrink-0">
+          <select
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white appearance-none cursor-pointer text-lg"
+          >
+            <option value="All">All Categories</option>
+            <option value="Title">Title</option>
+            <option value="User">User</option>
+            <option value="Tag">Tag</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+            <ChevronDown className="w-5 h-5 text-slate-500" />
+          </div>
+        </div>
+      </div>
+
       {/* Featured/Verified Carousel Section */}
       <div className="mb-20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -149,13 +214,13 @@ export function Challenges() {
             </span>
           </div>
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={scrollLeft}
               className="p-2 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 transition-colors text-slate-400 hover:text-white"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <button 
+            <button
               onClick={scrollRight}
               className="p-2 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 transition-colors text-slate-400 hover:text-white"
             >
@@ -164,12 +229,12 @@ export function Challenges() {
           </div>
         </div>
 
-        <div 
+        <div
           ref={carouselRef}
           className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {FEATURED_CHALLENGES.map((challenge, idx) => (
+          {filteredFeatured.map((challenge, idx) => (
             <motion.div
               key={challenge.id}
               initial={{ opacity: 0, x: 20 }}
@@ -179,7 +244,7 @@ export function Challenges() {
             >
               {/* Premium Gradient Background */}
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              
+
               <div className="p-8 relative z-10 flex flex-col h-full">
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex items-center gap-4">
@@ -198,10 +263,10 @@ export function Challenges() {
                     {challenge.difficulty}
                   </span>
                 </div>
-                
+
                 <h3 className="text-2xl font-bold mb-3 group-hover:text-indigo-400 transition-colors">{challenge.title}</h3>
                 <p className="text-sm text-slate-400 mb-8 leading-relaxed line-clamp-3 flex-grow">{challenge.desc}</p>
-                
+
                 <div className="flex items-center justify-between mt-auto">
                   <div className="flex flex-wrap gap-2">
                     {challenge.tags.map(tag => (
@@ -210,7 +275,7 @@ export function Challenges() {
                       </span>
                     ))}
                   </div>
-                  <button 
+                  <button
                     onClick={() => navigate('/', { state: { presetPrompt: `${challenge.company} Challenge: ${challenge.title}` } })}
                     className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors shadow-lg shadow-indigo-900/20 group-hover:scale-105"
                   >
@@ -234,7 +299,7 @@ export function Challenges() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {COMMUNITY_CHALLENGES.map((challenge, idx) => (
+          {filteredCommunity.map((challenge, idx) => (
             <motion.div
               key={challenge.id}
               initial={{ opacity: 0, y: 20 }}
@@ -254,13 +319,13 @@ export function Challenges() {
                   {challenge.likes}
                 </div>
               </div>
-              
+
               <h3 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors">{challenge.title}</h3>
               <p className="text-sm text-slate-400 mb-6 flex-grow">{challenge.desc}</p>
-              
+
               <div className="flex items-center justify-between mt-auto">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{challenge.lang}</span>
-                <button 
+                <button
                   onClick={() => navigate('/', { state: { presetPrompt: challenge.title } })}
                   className="flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors"
                 >
@@ -271,6 +336,7 @@ export function Challenges() {
           ))}
         </div>
       </div>
+
     </div>
   );
 }
