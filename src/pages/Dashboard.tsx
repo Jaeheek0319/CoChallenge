@@ -1,12 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useProjects } from '../hooks/useProjects';
 import { Clock, CheckCircle, Code2, Trash2, ArrowRight, Plus } from 'lucide-react';
 
+type FilterType = 'all' | 'completed' | 'in-progress';
+
 export function Dashboard() {
   const { projects, loading } = useProjects();
   const navigate = useNavigate();
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+
+  const completedProjects = projects.filter(p => p.currentStep === p.steps.length - 1);
+  const inProgressProjects = projects.filter(p => p.currentStep < p.steps.length - 1);
+
+  const getFilteredProjects = () => {
+    switch (activeFilter) {
+      case 'completed':
+        return completedProjects;
+      case 'in-progress':
+        return inProgressProjects;
+      default:
+        return projects;
+    }
+  };
+
+  const filteredProjects = getFilteredProjects();
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -22,9 +41,43 @@ export function Dashboard() {
           </div>
           <div className="glass-panel p-4 rounded-2xl flex flex-col min-w-32">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Completed</span>
-            <span className="text-2xl font-bold text-green-500">{projects.filter(p => p.currentStep === p.steps.length - 1).length}</span>
+            <span className="text-2xl font-bold text-green-500">{completedProjects.length}</span>
           </div>
         </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 mb-8">
+        <button
+          onClick={() => setActiveFilter('all')}
+          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
+            activeFilter === 'all'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          All Projects ({projects.length})
+        </button>
+        <button
+          onClick={() => setActiveFilter('in-progress')}
+          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
+            activeFilter === 'in-progress'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          In Progress ({inProgressProjects.length})
+        </button>
+        <button
+          onClick={() => setActiveFilter('completed')}
+          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
+            activeFilter === 'completed'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          Completed ({completedProjects.length})
+        </button>
       </div>
 
       {loading ? (
@@ -32,15 +85,29 @@ export function Dashboard() {
           <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4" />
           <h3 className="text-xl font-bold mb-2 text-slate-300">Loading your journey...</h3>
         </div>
-      ) : projects.length === 0 ? (
+      ) : filteredProjects.length === 0 ? (
         <div className="text-center py-32 border-2 border-dashed border-slate-800 rounded-3xl">
           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6">
             <Code2 className="w-10 h-10 text-slate-700" />
           </div>
-          <h3 className="text-xl font-bold mb-2">No projects yet</h3>
-          <p className="text-slate-500 mb-8 max-w-sm mx-auto">Start by describing a project on the homepage and the AI will generate your first lesson.</p>
+          {activeFilter === 'completed' ? (
+            <>
+              <h3 className="text-xl font-bold mb-2">No completed projects yet</h3>
+              <p className="text-slate-500 mb-8 max-w-sm mx-auto">Complete your first project to see it here!</p>
+            </>
+          ) : activeFilter === 'in-progress' ? (
+            <>
+              <h3 className="text-xl font-bold mb-2">No projects in progress</h3>
+              <p className="text-slate-500 mb-8 max-w-sm mx-auto">All your projects are completed! Start a new one to continue learning.</p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xl font-bold mb-2">No projects yet</h3>
+              <p className="text-slate-500 mb-8 max-w-sm mx-auto">Start by describing a project on the homepage and the AI will generate your first lesson.</p>
+            </>
+          )}
           <button 
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/school')}
             className="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-95"
           >
             Start Learning
@@ -65,7 +132,7 @@ export function Dashboard() {
               <h3 className="text-lg font-bold text-center text-slate-200 group-hover:text-white transition-colors">Make a New Project</h3>
             </div>
           </motion.div>
-          {projects.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((project, idx) => {
+          {filteredProjects.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((project, idx) => {
             const progress = Math.round(((project.currentStep + 1) / project.steps.length) * 100);
             
             return (
