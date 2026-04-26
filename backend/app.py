@@ -8,6 +8,15 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from flask_socketio import SocketIO, emit
+import logging
+import json_repair
+
+# Suppress the "non-text parts" warning from google-genai SDK when tool calling
+class _NoFunctionCallWarning(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "there are non-text parts in the response:" not in record.getMessage()
+
+logging.getLogger("google_genai.types").addFilter(_NoFunctionCallWarning())
 
 try:
     import ptyprocess
@@ -40,7 +49,12 @@ except ImportError:
     print("WARNING: google-adk is not installed or failed to import.")
     adk_available = False
 
-MODEL_ID = "gemini-2.5-flash"
+import re
+import json_repair
+
+MODEL_ID = "gemini-2.5-flash-lite"
+SLOW_MODEL_ID = "gemini-2.5-flash"
+ADV_MODEL_ID = "gemini-2.5-pro"
 
 if adk_available:
     agent1_idea = LlmAgent(
@@ -58,22 +72,38 @@ if adk_available:
     agent3_components = LlmAgent(
         name="Component_Identifier_Agent",
         model=MODEL_ID,
-        instruction="You are Step 3. Break apart the project by identifying key functional components and concepts to be taught for each step. Output these components clearly."
+        instruction="""You are Step 3. Break apart the project into exactly 4-6 key functional components.
+        MANDATORY: Output ONLY a JSON list of objects:
+        [{"title": "Step Title", "concept": "Brief description of what to teach"}]
+        No extra text or markdown."""
     )
 
-    agent4_step_gen = LlmAgent(
-        name="Step_Generator_Agent",
-        model=MODEL_ID,
-        instruction="""You are Step 4. For each key functional component, create a step according to a JSON format with 'title', 'explanation', 'task', 'hint', 'solution', and 'starterCode'. 
-        CRITICAL TOKEN OPTIMIZATION & LEARNING ENFORCEMENT: 
-        1. Only the VERY FIRST step (index 0) should contain 'starterCode'. This starter code MUST BE ABSOLUTELY BARE BONES. It MUST NOT contain any project logic, game loops, variables, or solutions. It should ONLY be a basic skeleton (e.g., `<!DOCTYPE html><html>...</html>` or `#include <iostream> int main() { return 0; }`). DO NOT IMPLEMENT THE PROJECT IN THE STARTER CODE.
-        2. For ALL subsequent steps (index 1 and above), set 'starterCode' to an empty string (""). 
-        This ensures the user starts with a blank slate and their progress is maintained as they move through steps without overwriting their code."""
-    )
+    agent4_step_template = """You are Step 4. Create ONE specific project step for the component: {component_title}.
+        
+        CONTEXT:
+        Project: {project_plan}
+        Implementation: {full_code}
+        Specific Concept to Teach: {concept}
+
+        OUTPUT SCHEMA:
+        {{
+          "title": "Step Title",
+          "lesson": "DETAILED 1-2 paragraph explanation of the concepts (e.g. how a loop works, what an array is)",
+          "explanation": "CONCISE 1-2 sentence instruction on what to do in this specific step",
+          "task": "Specific task for the user",
+          "hint": "Subtle hint",
+          "solution": "The full code for this specific step",
+          "starterCode": {{ "filename": "..." }}
+        }}
+        
+        RULES:
+        1. If this is Step 0 (the first component), provide a bare skeleton in 'starterCode'.
+        2. If this is NOT Step 0, 'starterCode' MUST be {{}}.
+        3. Output ONLY the JSON object. No markdown."""
 
     agent5_refiner = LlmAgent(
         name="Starter_Code_Refiner_Agent",
-        model=MODEL_ID,
+        model=ADV_MODEL_ID,
         instruction="""You are Step 5. Refine the 'starterCode' for all steps:
         1. Ensure ONLY step 0 has a non-empty 'starterCode'. 
         2. EXTREMELY IMPORTANT: The 'starterCode' for step 0 MUST NOT contain any of the actual project logic or solution. If you see game loops, print statements related to the project, or any completed features in the 'starterCode', YOU MUST DELETE THEM and replace them with a bare minimum empty skeleton. The starter code's purpose is to be a learning tool, so the student must write the logic themselves.
@@ -82,34 +112,19 @@ if adk_available:
 
     agent6_reviser = LlmAgent(
         name="Content_Reviser_Agent",
-        model=MODEL_ID,
-        instruction="""You are Step 6, the final step. Revise the explanation, task, and hint. 
+        model=ADV_MODEL_ID,
+        instruction="""You are Step 6, the final content reviser. 
+        MANDATORY: Output only the complete, final JSON object.
+        CRITICAL: The 'steps' array MUST contain ALL steps generated in the previous phase. DO NOT omit any steps.
+        
+        SCHEMA:
+        { "title": "...", "description": "...", "language": "...", "difficulty": "...", "learningGoals": [], "files": [], "steps": [...] }
+        
         FINAL QUALITY CHECK: 
-        1. Ensure that ONLY step 0 (index 0) has a non-empty 'starterCode'. All other steps MUST have 'starterCode': "". 
-        2. CRITICAL LEARNING ENFORCEMENT: For step 0, ensure the 'starterCode' is strictly an empty starting point (like an empty HTML body or an empty main function). IT MUST NOT CONTAIN THE SOLUTION OR FULFILL ANY TASK REQUIREMENTS. For example, if the project is a guessing game, the starter code MUST NOT have random number generation or loops. It MUST be totally empty of logic.
-        3. CRITICAL: If the Language is Python, use exactly one file named 'main.py'. If C, use exactly one file named 'main.c'. If C++, use exactly one file named 'main.cpp'. If Web, use 'index.html', 'style.css', 'script.js' etc.
-        IMPORTANT: Your output MUST be ONLY a JSON object representing a structured project lesson, exactly matching this schema:
-        {
-          "title": "Project Title",
-          "description": "Short description of the project",
-          "language": "the language specified",
-          "difficulty": "the difficulty level",
-          "learningGoals": ["Goal 1", "Goal 2"],
-          "files": [
-            { "name": "filename (e.g. main.py, main.c, main.cpp, or index.html)", "language": "language name", "content": "..." }
-          ],
-          "steps": [
-            {
-              "title": "Step title",
-              "explanation": "Detailed explanation of concepts",
-              "task": "What the user needs to do",
-              "hint": "A subtle hint",
-              "solution": "The final code for this step",
-              "starterCode": { "filename": "starter code for this step" }
-            }
-          ]
-        }
-        Return ONLY the JSON. No markdown, no backticks."""
+        1. Ensure ONLY step 0 (index 0) has a non-empty 'starterCode'.
+        2. PRESERVE the 'lesson' and 'explanation' fields for every step.
+        3. Ensure all Python code blocks are properly escaped.
+        4. (CRITICAL!) Verify that only the minimum required starter code is provided in 'starterCode', to build the project from each step's instructions. If more is provided, remove it to ensure that the student learns by doing, not by reading the solution."""
     )
 
     pipeline = SequentialAgent(
@@ -117,10 +132,7 @@ if adk_available:
         sub_agents=[
             agent1_idea,
             agent2_code,
-            agent3_components,
-            agent4_step_gen,
-            agent5_refiner,
-            agent6_reviser
+            agent3_components
         ]
     )
 
@@ -148,92 +160,115 @@ async def generate_project():
         final_content = ""
         
         if adk_available:
-            print("--- Starting ADK Pipeline ---")
+            print("--- Starting Hybrid ADK Pipeline ---")
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            
+            # Phase A: Sequential Agents (Idea, Code, Components)
+            print("--> Running Phase A (Idea, Code, Components)...")
+            current_context = full_prompt
+            phase_a_results = []
+            for agent in [agent1_idea, agent2_code, agent3_components]:
+                resp = client.models.generate_content(
+                    model=agent.model,
+                    contents=f"System Instruction: {agent.instruction}\n\nUser Input: {current_context}",
+                )
+                current_context = resp.text
+                phase_a_results.append(resp.text)
+                print(f"    Completed {agent.name}.")
+
+            project_plan = phase_a_results[0]
+            full_code = phase_a_results[1]
+            components_json = phase_a_results[2]
+            
+            # Parse Components
+            print(f"--> Component Raw Output: {components_json[:100]}...")
             try:
-                from google.adk import Runner
-                from google.adk.sessions import InMemorySessionService
-                from google.genai import types
-                import uuid
+                # Use json_repair for robust parsing of the component list
+                components = json_repair.loads(components_json)
+                if not isinstance(components, list):
+                    # If it returned an object with a list inside, try to find it
+                    if isinstance(components, dict):
+                        for val in components.values():
+                            if isinstance(val, list):
+                                components = val
+                                break
                 
-                runner = Runner(
-                    app_name="Project_Generator",
-                    agent=pipeline,
-                    session_service=InMemorySessionService(),
-                    auto_create_session=True
-                )
-                
-                print("Running ADK sequential pipeline via Runner...")
-                session_id = str(uuid.uuid4())
-                events = runner.run_async(
-                    user_id="default_user",
-                    session_id=session_id,
-                    new_message=types.Content(role="user", parts=[types.Part.from_text(text=full_prompt)])
-                )
-                
-                async for event in events:
-                    print(".", end="", flush=True)
-                    event_text = ""
-                    
-                    # 1. Check for top-level text attribute
-                    if hasattr(event, 'text') and event.text:
-                        event_text = event.text
-                    
-                    # 2. Check for content object (common in ADK)
-                    elif hasattr(event, 'content') and event.content:
-                        c = event.content
-                        if hasattr(c, 'text') and c.text:
-                            event_text = c.text
-                        elif hasattr(c, 'parts') and c.parts:
-                            for p in c.parts:
-                                # Skip internal reasoning parts if present
-                                if hasattr(p, 'thought') and p.thought:
-                                    continue
-                                if hasattr(p, 'text') and p.text:
-                                    event_text += p.text
-                                    
-                    # 3. Check for message object (fallback)
-                    elif hasattr(event, 'message') and hasattr(event.message, 'content'):
-                        msg = event.message.content
-                        if hasattr(msg, 'text') and msg.text:
-                            event_text = msg.text
-                        elif hasattr(msg, 'parts') and msg.parts:
-                            for p in msg.parts:
-                                if hasattr(p, 'thought') and p.thought: continue
-                                if hasattr(p, 'text') and p.text:
-                                    event_text += p.text
-                        elif isinstance(msg, list):
-                            for p in msg:
-                                if hasattr(p, 'text') and p.text:
-                                    event_text += p.text
-                    
-                    if event_text.strip():
-                        final_content = event_text
-                        
-                print("\nPipeline execution finished.")
+                if not isinstance(components, list) or len(components) == 0:
+                    raise Exception("Not a valid list")
             except Exception as e:
-                print(f"Pipeline call via Runner failed ({e}). Falling back to Gemini SDK directly for pipeline simulation.")
-                
-                # Manual Sequential Fallback without ADK's Runner, directly calling the genai model
-                from google import genai
-                client = genai.Client(api_key=api_key)
-                current_context = full_prompt
-                agents = [
-                    agent1_idea, agent2_code, agent3_components, 
-                    agent4_step_gen, agent5_refiner, agent6_reviser
+                print(f"Failed to parse components JSON ({e}). Using fallback.")
+                components = [
+                    {"title": "Initial Setup", "concept": "Setting up the environment"},
+                    {"title": "Core Logic", "concept": "Implementing the main functionality"},
+                    {"title": "User Interaction", "concept": "Handling inputs and outputs"},
+                    {"title": "Polishing", "concept": "Refining the user experience"}
                 ]
+
+            # Phase B: Parallel Step Generation
+            print(f"--> Running Phase B (Parallel Step Gen for {len(components)} steps)...")
+            import asyncio
+            
+            async def gen_step(idx, comp):
+                prompt = agent4_step_template.format(
+                    component_title=comp['title'],
+                    project_plan=project_plan,
+                    full_code=full_code,
+                    concept=comp['concept']
+                )
+                if idx == 0:
+                    prompt += "\nREMINDER: This is Step 0. Provide 'starterCode'."
+                else:
+                    prompt += f"\nREMINDER: This is Step {idx}. 'starterCode' MUST be {{}}."
                 
-                for idx, agent in enumerate(agents):
-                    print(f"--> Executing {agent.name}...")
-                    response = client.models.generate_content(
-                        model=agent.model,
-                        contents=f"System Instruction: {agent.instruction}\n\nUser Input: {current_context}",
-                    )
-                    current_context = response.text
-                    print(f"    Completed {agent.name}.")
-                
-                final_content = current_context
-                
-            print("--- Pipeline Completed ---")
+                resp = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=MODEL_ID,
+                    contents=prompt
+                )
+                return resp.text
+
+            step_results = await asyncio.gather(*[gen_step(i, c) for i, c in enumerate(components)])
+            
+            # Aggregation
+            steps = []
+            for s in step_results:
+                try:
+                    steps.append(json_repair.loads(s))
+                except:
+                    continue
+
+            # Construct Aggregate Project
+            # Try to get basic info from the code agent or idea agent
+            project_aggregate = {
+                "title": prompt[:50],
+                "description": project_plan[:200],
+                "language": language,
+                "difficulty": difficulty,
+                "learningGoals": ["Master the implementation of the project"],
+                "files": [
+                    {"name": "main.py" if language.lower() == 'python' else ("main.c" if language.lower() == 'c' else "index.html"), 
+                     "language": language, "content": full_code}
+                ],
+                "steps": steps
+            }
+
+            # Phase C: Final Refinement & Revision
+            print("--> Running Phase C (Refinement & Revision)...")
+            aggregate_json = json.dumps(project_aggregate)
+            
+            refiner_resp = client.models.generate_content(
+                model=agent5_refiner.model,
+                contents=f"System Instruction: {agent5_refiner.instruction}\n\nUser Input: {aggregate_json}",
+            )
+            
+            reviser_resp = client.models.generate_content(
+                model=agent6_reviser.model,
+                contents=f"System Instruction: {agent6_reviser.instruction}\n\nUser Input: {refiner_resp.text}",
+            )
+            
+            final_content = reviser_resp.text
+            print("--- Hybrid Pipeline Completed ---")
         else:
             print("ADK not available. Using a standard fallback.")
             from google import genai
@@ -256,8 +291,47 @@ async def generate_project():
             if final_content.endswith("```"):
                 final_content = final_content[:-3]
         final_content = final_content.strip()
+
+        def clean_code_block(text):
+            if not isinstance(text, str): return text
+            text = text.strip()
+            # Catch ```python ... ``` or ``` ... ```
+            match = re.search(r'```(?:[a-zA-Z+]*)?\n?(.*?)\n?```', text, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+            return text
         
-        project_data = json.loads(final_content)
+        # Post-processing optimization: use json_repair to instantly fix common JSON syntax/truncation issues
+        try:
+            # json_repair.loads is a drop-in replacement for json.loads that handles mangled JSON
+            project_data = json_repair.loads(final_content)
+            
+            # If it's a string (which can happen with some repair cases), try one more parse
+            if isinstance(project_data, str):
+                project_data = json.loads(project_data)
+        except Exception as e:
+            print(f"[Post-Process] Fast repair failed, attempting fallback extraction: {e}")
+            import re
+            json_match = re.search(r'(\{.*\})', final_content, re.DOTALL)
+            if json_match:
+                try:
+                    project_data = json_repair.loads(json_match.group(1))
+                except:
+                    raise Exception("Could not recover JSON from agent output even with repair.")
+            else:
+                raise
+        
+        # Apply markdown cleaning to all code fields
+        if "files" in project_data:
+            for f in project_data["files"]:
+                if "content" in f: f["content"] = clean_code_block(f["content"])
+        
+        if "steps" in project_data:
+            for s in project_data["steps"]:
+                if "solution" in s: s["solution"] = clean_code_block(s["solution"])
+                if "starterCode" in s and isinstance(s["starterCode"], dict):
+                    for filename in s["starterCode"]:
+                        s["starterCode"][filename] = clean_code_block(s["starterCode"][filename])
         
         # Merge agent output with saved metadata
         project_metadata.update(project_data)
@@ -438,4 +512,4 @@ def handle_terminal_input(data):
             print(f"Failed to write to pty: {e}")
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)

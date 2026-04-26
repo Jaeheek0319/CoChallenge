@@ -7,3 +7,4 @@ asgiref
 flask-socketio
 ptyprocess
 simple-websocket
+json-repair
