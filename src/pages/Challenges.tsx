@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Globe, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search } from 'lucide-react';
+import { Globe, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search, ChevronDown } from 'lucide-react';
 
 const FEATURED_CHALLENGES = [
   {
@@ -101,19 +101,38 @@ export function Challenges() {
   const navigate = useNavigate();
   const carouselRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilter, setSearchFilter] = useState('All');
 
   const filteredFeatured = FEATURED_CHALLENGES.filter(c => {
     const query = searchQuery.toLowerCase();
-    return c.title.toLowerCase().includes(query) || 
-           c.company.toLowerCase().includes(query) ||
-           c.tags.some(t => t.toLowerCase().includes(query));
+    if (!query) return true;
+    
+    const matchesTitle = c.title.toLowerCase().includes(query);
+    const matchesUser = c.company.toLowerCase().includes(query);
+    const matchesTag = c.tags.some(t => t.toLowerCase().includes(query));
+
+    switch (searchFilter) {
+      case 'Title': return matchesTitle;
+      case 'User': return matchesUser;
+      case 'Tag': return matchesTag;
+      default: return matchesTitle || matchesUser || matchesTag;
+    }
   });
 
   const filteredCommunity = COMMUNITY_CHALLENGES.filter(c => {
     const query = searchQuery.toLowerCase();
-    return c.title.toLowerCase().includes(query) || 
-           c.author.toLowerCase().includes(query) ||
-           c.tags.some(t => t.toLowerCase().includes(query));
+    if (!query) return true;
+
+    const matchesTitle = c.title.toLowerCase().includes(query);
+    const matchesUser = c.author.toLowerCase().includes(query);
+    const matchesTag = c.tags.some(t => t.toLowerCase().includes(query));
+
+    switch (searchFilter) {
+      case 'Title': return matchesTitle;
+      case 'User': return matchesUser;
+      case 'Tag': return matchesTag;
+      default: return matchesTitle || matchesUser || matchesTag;
+    }
   });
 
   const scrollLeft = () => {
@@ -143,19 +162,36 @@ export function Challenges() {
             Pick one and our AI will guide you through building it.
           </p>
         </div>
+      </div>
 
-        {/* Search Bar */}
-        <div className="w-full md:w-72 relative group">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+      {/* Search Bar & Filters */}
+      <div className="mb-12 flex flex-col sm:flex-row gap-4">
+        <div className="w-full relative group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <Search className="w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
           </div>
           <input
             type="text"
-            placeholder="Search challenges, tags, users..."
+            placeholder="Search challenges..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all"
+            className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all text-lg"
           />
+        </div>
+        <div className="sm:w-48 relative shrink-0">
+          <select
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white appearance-none cursor-pointer text-lg"
+          >
+            <option value="All">All Categories</option>
+            <option value="Title">Title</option>
+            <option value="User">User</option>
+            <option value="Tag">Tag</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+            <ChevronDown className="w-5 h-5 text-slate-500" />
+          </div>
         </div>
       </div>
 
