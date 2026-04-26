@@ -351,6 +351,36 @@ export function Workspace() {
             value={activeFile?.content}
             theme="vs-dark"
             onChange={handleFileChange}
+            onMount={(editor, monaco) => {
+              editor.onDidType((text) => {
+                if (text === '>') {
+                  const position = editor.getPosition();
+                  if (!position) return;
+                  const model = editor.getModel();
+                  const lineContent = model.getLineContent(position.lineNumber);
+                  const textBeforeCursor = lineContent.substring(0, position.column - 1);
+
+                  const match = textBeforeCursor.match(/<([a-zA-Z0-9\-]+)[^>]*>$/);
+                  if (!match) return;
+                  
+                  const tagName = match[1];
+                  const isSelfClosing = /<\s*[a-zA-Z0-9\-]+[^>]*\/\s*>$/.test(textBeforeCursor);
+                  if (isSelfClosing) return;
+
+                  const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+                  if (voidElements.includes(tagName.toLowerCase())) return;
+
+                  const closingTag = `</${tagName}>`;
+                  editor.executeEdits("auto-close-tag", [{
+                    range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                    text: closingTag,
+                    forceMoveMarkers: true
+                  }]);
+
+                  editor.setPosition(new monaco.Position(position.lineNumber, position.column));
+                }
+              });
+            }}
             options={{
               minimap: { enabled: false },
               fontSize: 14,
@@ -361,6 +391,10 @@ export function Workspace() {
               lineNumbers: "on",
               scrollBeyondLastLine: false,
               automaticLayout: true,
+              autoClosingBrackets: 'always',
+              autoClosingQuotes: 'always',
+              formatOnType: true,
+              formatOnPaste: true,
             }}
           />
         </div>

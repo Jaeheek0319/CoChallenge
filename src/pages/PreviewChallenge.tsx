@@ -26,6 +26,11 @@ export function PreviewChallenge() {
   const [copied, setCopied] = useState(false);
   const [code, setCode] = useState(challengeData?.starterCode || '');
 
+  const isHtml = challengeData?.primaryLanguage.toLowerCase().includes('html') || false;
+  const codeLooksLikeHtml = code.trim().startsWith('<');
+  const shouldTreatAsHtml = isHtml || codeLooksLikeHtml;
+  const editorLanguage = shouldTreatAsHtml ? 'html' : (challengeData?.primaryLanguage.toLowerCase() || 'javascript');
+
   if (!challengeData) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center bg-slate-950">
@@ -62,13 +67,26 @@ export function PreviewChallenge() {
               background: #0f172a;
               color: #f1f5f9;
             }
-            h1, h2, h3 { color: #e2e8f0; }
-            pre { background: #1e293b; padding: 10px; border-radius: 4px; overflow-x: auto; }
+            #console-output {
+              font-family: monospace;
+              white-space: pre-wrap;
+              color: #10b981;
+            }
           </style>
         </head>
         <body>
-          <h1>${challengeData.title}</h1>
-          <script>${code}</script>
+          <div id="console-output"></div>
+          <script>
+            const originalLog = console.log;
+            console.log = function(...args) {
+              originalLog.apply(console, args);
+              const out = document.getElementById('console-output');
+              if (out) {
+                out.textContent += args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ') + '\\n';
+              }
+            };
+          </script>
+          ${shouldTreatAsHtml ? code : `<script>${code}</script>`}
         </body>
       </html>
     `;
@@ -209,14 +227,48 @@ export function PreviewChallenge() {
             <div className="flex-1 relative bg-[#1e1e1e]">
               <Editor
                 height="100%"
-                language={challengeData.primaryLanguage.toLowerCase()}
+                language={editorLanguage}
                 value={code}
                 onChange={(value) => setCode(value || '')}
                 theme="vs-dark"
+                onMount={(editor, monaco) => {
+                  editor.onDidType((text) => {
+                    if (text === '>') {
+                      const position = editor.getPosition();
+                      if (!position) return;
+                      const model = editor.getModel();
+                      const lineContent = model.getLineContent(position.lineNumber);
+                      const textBeforeCursor = lineContent.substring(0, position.column - 1);
+
+                      const match = textBeforeCursor.match(/<([a-zA-Z0-9\-]+)[^>]*>$/);
+                      if (!match) return;
+                      
+                      const tagName = match[1];
+                      const isSelfClosing = /<\s*[a-zA-Z0-9\-]+[^>]*\/\s*>$/.test(textBeforeCursor);
+                      if (isSelfClosing) return;
+
+                      const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+                      if (voidElements.includes(tagName.toLowerCase())) return;
+
+                      const closingTag = `</${tagName}>`;
+                      editor.executeEdits("auto-close-tag", [{
+                        range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                        text: closingTag,
+                        forceMoveMarkers: true
+                      }]);
+
+                      editor.setPosition(new monaco.Position(position.lineNumber, position.column));
+                    }
+                  });
+                }}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,
                   lineHeight: 1.6,
+                  autoClosingBrackets: 'always',
+                  autoClosingQuotes: 'always',
+                  formatOnType: true,
+                  formatOnPaste: true,
                 }}
               />
             </div>
