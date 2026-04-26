@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Globe, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User } from 'lucide-react';
 
 const FEATURED_CHALLENGES = [
@@ -99,19 +99,42 @@ const COMMUNITY_CHALLENGES = [
 
 export function Challenges() {
   const navigate = useNavigate();
-  const carouselRef = useRef<HTMLDivElement>(null);
+  const [startIndex, setStartIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
 
-  const scrollLeft = () => {
-    if (carouselRef.current) {
-      carouselRef.current.scrollBy({ left: -350, behavior: 'smooth' });
-    }
+  const prevSlide = () => {
+    setDirection(-1);
+    setStartIndex((prev) => prev - 1);
   };
 
-  const scrollRight = () => {
-    if (carouselRef.current) {
-      carouselRef.current.scrollBy({ left: 350, behavior: 'smooth' });
-    }
+  const nextSlide = () => {
+    setDirection(1);
+    setStartIndex((prev) => prev + 1);
   };
+
+  const slideVariants = {
+    enter: (dir: number) => ({
+      x: dir > 0 ? 300 : -300,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (dir: number) => ({
+      x: dir > 0 ? -300 : 300,
+      opacity: 0,
+    }),
+  };
+
+  const visibleItems = [];
+  for (let i = 0; i < FEATURED_CHALLENGES.length; i++) {
+    const index = (((startIndex + i) % FEATURED_CHALLENGES.length) + FEATURED_CHALLENGES.length) % FEATURED_CHALLENGES.length;
+    visibleItems.push({
+      ...FEATURED_CHALLENGES[index],
+      renderKey: `${FEATURED_CHALLENGES[index].id}-${startIndex + i}`
+    });
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -124,7 +147,7 @@ export function Challenges() {
           </div>
           <h1 className="text-4xl font-bold mb-2">Build Real-World Projects</h1>
           <p className="text-slate-400 font-medium">
-            Tackle challenges posted by top companies or explore our community-driven project ideas. 
+            Tackle challenges posted by top companies or explore our community-driven project ideas.
             Pick one and our AI will guide you through building it.
           </p>
         </div>
@@ -142,78 +165,82 @@ export function Challenges() {
               <BadgeCheck className="w-3.5 h-3.5" /> Verified
             </span>
           </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={scrollLeft}
-              className="p-2 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 transition-colors text-slate-400 hover:text-white"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={scrollRight}
-              className="p-2 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 transition-colors text-slate-400 hover:text-white"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
         </div>
 
-        <div 
-          ref={carouselRef}
-          className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {FEATURED_CHALLENGES.map((challenge, idx) => (
-            <motion.div
-              key={challenge.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.1 }}
-              className="min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden hover:border-indigo-500/50 transition-all border-b-4 border-b-transparent hover:border-b-indigo-500 relative flex flex-col"
-            >
-              {/* Premium Gradient Background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              <div className="p-8 relative z-10 flex flex-col h-full">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${challenge.logoGradient} flex items-center justify-center shadow-lg`}>
-                      <span className="text-white font-bold text-xl">{challenge.company[0]}</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white">{challenge.company}</span>
-                        {challenge.verified && <BadgeCheck className="w-4 h-4 text-blue-400" />}
+        <div className="relative group/carousel -mx-6 px-6 overflow-hidden">
+          <button
+            onClick={prevSlide}
+            className="absolute left-8 top-1/2 -translate-y-[calc(50%+1rem)] z-20 p-4 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 hover:bg-slate-800 transition-all text-white shadow-[0_0_30px_rgba(0,0,0,0.5)] opacity-100 md:opacity-0 md:group-hover/carousel:opacity-100 hover:scale-110"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          <button
+            onClick={nextSlide}
+            className="absolute right-8 top-1/2 -translate-y-[calc(50%+1rem)] z-20 p-4 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 hover:bg-slate-800 transition-all text-white shadow-[0_0_30px_rgba(0,0,0,0.5)] opacity-100 md:opacity-0 md:group-hover/carousel:opacity-100 hover:scale-110"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+
+          <div className="flex gap-6 pb-8">
+            <AnimatePresence mode="popLayout" custom={direction} initial={false}>
+              {visibleItems.map((challenge) => (
+                <motion.div
+                  layout
+                  custom={direction}
+                  variants={slideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  key={challenge.renderKey}
+                  transition={{ duration: 1, ease: [0.6, 1, 0.36, 1] }}
+                  className="min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden hover:border-indigo-500/50 transition-all border-b-4 border-b-transparent hover:border-b-indigo-500 relative flex flex-col"
+                >
+                  {/* Premium Gradient Background */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                  <div className="p-8 relative z-10 flex flex-col h-full">
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${challenge.logoGradient} flex items-center justify-center shadow-lg`}>
+                          <span className="text-white font-bold text-xl">{challenge.company[0]}</span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-white">{challenge.company}</span>
+                            {challenge.verified && <BadgeCheck className="w-4 h-4 text-blue-400" />}
+                          </div>
+                          <span className="text-xs font-medium text-slate-400">{challenge.role}</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-medium text-slate-400">{challenge.role}</span>
+                      <span className="px-3 py-1 bg-slate-800/80 rounded-full text-[10px] font-bold text-slate-300 uppercase tracking-widest border border-slate-700">
+                        {challenge.difficulty}
+                      </span>
+                    </div>
+
+                    <h3 className="text-2xl font-bold mb-3 group-hover:text-indigo-400 transition-colors">{challenge.title}</h3>
+                    <p className="text-sm text-slate-400 mb-8 leading-relaxed line-clamp-3 flex-grow">{challenge.desc}</p>
+
+                    <div className="flex items-center justify-between mt-auto">
+                      <div className="flex flex-wrap gap-2">
+                        {challenge.tags.map(tag => (
+                          <span key={tag} className="px-2 py-1 bg-slate-900/50 rounded-lg text-[10px] font-medium text-slate-400 border border-slate-800">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => navigate('/', { state: { presetPrompt: `${challenge.company} Challenge: ${challenge.title}` } })}
+                        className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors shadow-lg shadow-indigo-900/20 group-hover:scale-105"
+                      >
+                        <ArrowRight className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
-                  <span className="px-3 py-1 bg-slate-800/80 rounded-full text-[10px] font-bold text-slate-300 uppercase tracking-widest border border-slate-700">
-                    {challenge.difficulty}
-                  </span>
-                </div>
-                
-                <h3 className="text-2xl font-bold mb-3 group-hover:text-indigo-400 transition-colors">{challenge.title}</h3>
-                <p className="text-sm text-slate-400 mb-8 leading-relaxed line-clamp-3 flex-grow">{challenge.desc}</p>
-                
-                <div className="flex items-center justify-between mt-auto">
-                  <div className="flex flex-wrap gap-2">
-                    {challenge.tags.map(tag => (
-                      <span key={tag} className="px-2 py-1 bg-slate-900/50 rounded-lg text-[10px] font-medium text-slate-400 border border-slate-800">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <button 
-                    onClick={() => navigate('/', { state: { presetPrompt: `${challenge.company} Challenge: ${challenge.title}` } })}
-                    className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors shadow-lg shadow-indigo-900/20 group-hover:scale-105"
-                  >
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
@@ -248,13 +275,13 @@ export function Challenges() {
                   {challenge.likes}
                 </div>
               </div>
-              
+
               <h3 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors">{challenge.title}</h3>
               <p className="text-sm text-slate-400 mb-6 flex-grow">{challenge.desc}</p>
-              
+
               <div className="flex items-center justify-between mt-auto">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{challenge.lang}</span>
-                <button 
+                <button
                   onClick={() => navigate('/', { state: { presetPrompt: challenge.title } })}
                   className="flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors"
                 >
@@ -265,7 +292,7 @@ export function Challenges() {
           ))}
         </div>
       </div>
-      
+
       {/* Call to Action */}
       <div className="mt-20 text-center p-12 glass-panel rounded-3xl border-dashed">
         <Code className="w-12 h-12 text-slate-800 mx-auto mb-4" />
