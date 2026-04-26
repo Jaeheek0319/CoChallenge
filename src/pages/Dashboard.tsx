@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useProjects } from '../hooks/useProjects';
-import { Clock, CheckCircle, Code2, Trash2, ArrowRight, Plus } from 'lucide-react';
+import { Clock, CheckCircle, Trophy, Trash2, ArrowRight, Plus } from 'lucide-react';
 
 type FilterType = 'all' | 'completed' | 'in-progress';
 
@@ -50,31 +50,28 @@ export function Dashboard() {
       <div className="flex items-center gap-2 mb-8">
         <button
           onClick={() => setActiveFilter('all')}
-          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
-            activeFilter === 'all'
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-          }`}
+          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeFilter === 'all'
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+            : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
         >
           All Projects ({projects.length})
         </button>
         <button
           onClick={() => setActiveFilter('in-progress')}
-          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
-            activeFilter === 'in-progress'
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-          }`}
+          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeFilter === 'in-progress'
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+            : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
         >
           In Progress ({inProgressProjects.length})
         </button>
         <button
           onClick={() => setActiveFilter('completed')}
-          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
-            activeFilter === 'completed'
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-          }`}
+          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeFilter === 'completed'
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+            : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
         >
           Completed ({completedProjects.length})
         </button>
@@ -88,7 +85,7 @@ export function Dashboard() {
       ) : filteredProjects.length === 0 ? (
         <div className="text-center py-32 border-2 border-dashed border-slate-800 rounded-3xl">
           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Code2 className="w-10 h-10 text-slate-700" />
+            <Trophy className="w-10 h-10 text-slate-700" />
           </div>
           {activeFilter === 'completed' ? (
             <>
@@ -106,7 +103,7 @@ export function Dashboard() {
               <p className="text-slate-500 mb-8 max-w-sm mx-auto">Start by describing a project on the homepage and the AI will generate your first lesson.</p>
             </>
           )}
-          <button 
+          <button
             onClick={() => navigate('/school')}
             className="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-95"
           >
@@ -132,9 +129,9 @@ export function Dashboard() {
               <h3 className="text-lg font-bold text-center text-slate-200 group-hover:text-white transition-colors">Make a New Project</h3>
             </div>
           </motion.div>
-          {filteredProjects.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((project, idx) => {
+          {filteredProjects.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((project, idx) => {
             const progress = Math.round(((project.currentStep + 1) / project.steps.length) * 100);
-            
+
             return (
               <motion.div
                 key={project.id}
@@ -153,24 +150,24 @@ export function Dashboard() {
                       {new Date(project.updatedAt).toLocaleDateString()}
                     </div>
                   </div>
-                  
+
                   <h3 className="text-xl font-bold mb-2 group-hover:text-blue-400 transition-colors">{project.title}</h3>
                   <p className="text-sm text-slate-400 line-clamp-2 mb-6 h-10">{project.description}</p>
-                  
+
                   <div className="space-y-2 mb-6">
                     <div className="flex justify-between text-xs font-bold text-slate-500">
                       <span>Progress</span>
                       <span>{progress}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-blue-600 transition-all duration-1000"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     onClick={() => navigate(`/workspace/${project.id}`)}
                     className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-blue-600 transition-all rounded-xl font-bold text-sm active:scale-[0.98]"
                   >

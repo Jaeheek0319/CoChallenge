@@ -9,7 +9,7 @@ import { PreviewChallenge } from './pages/PreviewChallenge';
 import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
-import { Code2, Layout, Globe, LogOut, Sparkles, User } from 'lucide-react';
+import { Trophy, Layout, Globe, LogOut, Sparkles, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { ProjectProvider } from './contexts/ProjectContext';
@@ -44,7 +44,7 @@ export default function App() {
                 <div className="flex items-center gap-8">
                   <Link to="/" className="flex items-center gap-2 group">
                     <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center group-hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/20">
-                      <Code2 className="w-5 h-5 text-white" />
+                      <Trophy className="w-5 h-5 text-white" />
                     </div>
                     <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                       CoChallenge
