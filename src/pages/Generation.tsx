@@ -149,8 +149,13 @@ export function Generation() {
                 <textarea
                   value={prompt}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                    stopPromptAnimation();
-                    setPrompt(e.target.value);
+                    const val = e.target.value;
+                    setPrompt(val);
+                    if (!val) {
+                      resumePromptAnimation();
+                    } else {
+                      stopPromptAnimation();
+                    }
                   }}
                   onFocus={stopPromptAnimation}
                   onBlur={resumePromptAnimation}
@@ -230,7 +235,10 @@ export function Generation() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 + idx * 0.1 }}
-                onClick={() => setPrompt(ex.prompt)}
+                onClick={() => {
+                  stopPromptAnimation();
+                  setPrompt(ex.prompt);
+                }}
                 className="p-4 glass-panel rounded-xl text-left hover:border-blue-500/50 transition-all group active:scale-95"
               >
                 <div className="flex items-center gap-2 mb-2">
