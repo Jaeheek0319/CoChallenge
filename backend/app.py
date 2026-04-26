@@ -72,7 +72,7 @@ if adk_available:
 
     agent3_components = LlmAgent(
         name="Component_Identifier_Agent",
-        model=MODEL_ID,
+        model=SLOW_MODEL_ID,
         instruction="""You are Step 3. Break apart the project into exactly 4-6 key functional components.
         MANDATORY: Output ONLY a JSON list of objects:
         [{"title": "Step Title", "concept": "Brief description of what to teach"}]
@@ -113,7 +113,7 @@ if adk_available:
 
     agent6_reviser = LlmAgent(
         name="Content_Reviser_Agent",
-        model=ADV_MODEL_ID,
+        model=SLOW_MODEL_ID,
         instruction="""You are Step 6, the final content reviser. 
         MANDATORY: Output only the complete, final JSON object.
         CRITICAL: The 'steps' array MUST contain ALL steps generated in the previous phase. DO NOT omit any steps.
@@ -125,7 +125,7 @@ if adk_available:
         1. Ensure ONLY step 0 (index 0) has a non-empty 'starterCode'.
         2. PRESERVE the 'lesson' and 'explanation' fields for every step.
         3. Ensure all Python code blocks are properly escaped.
-        4. (CRITICAL!) Verify that only the minimum required starter code is provided in 'starterCode', to build the project from each step's instructions. If more is provided, remove it to ensure that the student learns by doing, not by reading the solution."""
+        4. (CRITICAL!) Verify that only the minimum required starter code is provided in 'starterCode' to allow the student to learn by building on their own."""
     )
 
     pipeline = SequentialAgent(

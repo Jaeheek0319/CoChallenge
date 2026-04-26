@@ -273,7 +273,12 @@ builtins.input = async_input
       <!DOCTYPE html>
       <html>
         <head>
-          <style>${cssFile?.content || ''}</style>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; font-family: sans-serif; }
+            ${cssFile?.content || ''}
+          </style>
         </head>
         <body>
           ${htmlFile.content}
@@ -431,7 +436,7 @@ builtins.input = async_input
       <div className="w-80 flex-shrink-0 border-r border-slate-800 bg-slate-900/30 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h2 className="font-bold text-slate-200">Instructions</h2>
-          <div className="text-xs font-mono text-slate-500">
+          <div className="text-xs font-mono text-slate-500 flex items-center">
             {step.lesson && (
               <button
                 onClick={() => setShowLessonModal(true)}
@@ -441,7 +446,7 @@ builtins.input = async_input
                 <BookOpen className="w-4 h-4" />
               </button>
             )}
-            Step {currentStep + 1} / {project.steps.length}
+            <span className="relative -top-[1px]">Step {currentStep + 1} / {project.steps.length}</span>
           </div>
         </div>
         
@@ -650,7 +655,7 @@ builtins.input = async_input
 
       {/* Right Panel: Preview & AI */}
       <div className="w-[400px] flex-shrink-0 flex flex-col bg-slate-900/30">
-        <div className="h-1/2 flex flex-col border-b border-slate-800">
+        <div className="h-[60%] flex flex-col border-b border-slate-800">
           <div className="p-3 border-b border-slate-800 flex items-center gap-2 text-slate-400">
             {['python', 'c', 'cpp'].includes(project.language) ? <Terminal className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             <span className="text-xs font-bold uppercase tracking-widest">
@@ -672,11 +677,18 @@ builtins.input = async_input
                 />
               </div>
             ) : previewUrl ? (
-              <iframe 
-                src={previewUrl} 
-                className="w-full h-full border-none bg-white"
-                title="preview"
-              />
+              <div className="w-full h-full overflow-hidden bg-white relative">
+                <iframe 
+                  src={previewUrl} 
+                  className="border-none absolute top-0 left-0 origin-top-left"
+                  style={{
+                    width: '200%',
+                    height: '200%',
+                    transform: 'scale(0.5)',
+                  }}
+                  title="preview"
+                />
+              </div>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-500 gap-4">
                 <Play className="w-12 h-12 opacity-10" />
@@ -686,7 +698,7 @@ builtins.input = async_input
           </div>
         </div>
 
-        <div className="h-1/2 flex flex-col overflow-hidden">
+        <div className="h-[40%] flex flex-col overflow-hidden">
           <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
             <div className="flex items-center gap-2 text-blue-400">
               <Sparkles className="w-4 h-4" />
