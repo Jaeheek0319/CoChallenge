@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 from flask_socketio import SocketIO, emit
 import logging
 import json_repair
+import asyncio
+import re
+from google import genai
 
 # Suppress the "non-text parts" warning from google-genai SDK when tool calling
 class _NoFunctionCallWarning(logging.Filter):
@@ -49,8 +52,6 @@ except ImportError:
     print("WARNING: google-adk is not installed or failed to import.")
     adk_available = False
 
-import re
-import json_repair
 
 MODEL_ID = "gemini-2.5-flash-lite"
 SLOW_MODEL_ID = "gemini-2.5-flash"
@@ -88,7 +89,7 @@ if adk_available:
         OUTPUT SCHEMA:
         {{
           "title": "Step Title",
-          "lesson": "DETAILED 1-2 paragraph explanation of the concepts (e.g. how a loop works, what an array is)",
+          "lesson": "CLEANLY FORMATTED, BULLET-POINTED explanation of the concepts (e.g. how a loop works, what an array is). Use markdown bullet points for readability.",
           "explanation": "CONCISE 1-2 sentence instruction on what to do in this specific step",
           "task": "Specific task for the user",
           "hint": "Subtle hint",
@@ -136,6 +137,15 @@ if adk_available:
         ]
     )
 
+def clean_code_block(text):
+    if not isinstance(text, str): return text
+    text = text.strip()
+    # Catch ```python ... ``` or ``` ... ```
+    match = re.search(r'```(?:[a-zA-Z+]*)?\n?(.*?)\n?```', text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text
+
 @app.route('/api/generateProject', methods=['POST'])
 async def generate_project():
     data = request.json
@@ -161,7 +171,6 @@ async def generate_project():
         
         if adk_available:
             print("--- Starting Hybrid ADK Pipeline ---")
-            from google import genai
             client = genai.Client(api_key=api_key)
             
             # Phase A: Sequential Agents (Idea, Code, Components)
@@ -207,7 +216,6 @@ async def generate_project():
 
             # Phase B: Parallel Step Generation
             print(f"--> Running Phase B (Parallel Step Gen for {len(components)} steps)...")
-            import asyncio
             
             async def gen_step(idx, comp):
                 prompt = agent4_step_template.format(
@@ -271,7 +279,6 @@ async def generate_project():
             print("--- Hybrid Pipeline Completed ---")
         else:
             print("ADK not available. Using a standard fallback.")
-            from google import genai
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
                 model=MODEL_ID,
@@ -292,14 +299,6 @@ async def generate_project():
                 final_content = final_content[:-3]
         final_content = final_content.strip()
 
-        def clean_code_block(text):
-            if not isinstance(text, str): return text
-            text = text.strip()
-            # Catch ```python ... ``` or ``` ... ```
-            match = re.search(r'```(?:[a-zA-Z+]*)?\n?(.*?)\n?```', text, re.DOTALL)
-            if match:
-                return match.group(1).strip()
-            return text
         
         # Post-processing optimization: use json_repair to instantly fix common JSON syntax/truncation issues
         try:
@@ -311,7 +310,6 @@ async def generate_project():
                 project_data = json.loads(project_data)
         except Exception as e:
             print(f"[Post-Process] Fast repair failed, attempting fallback extraction: {e}")
-            import re
             json_match = re.search(r'(\{.*\})', final_content, re.DOTALL)
             if json_match:
                 try:
