@@ -328,7 +328,7 @@ export function Challenges() {
                             ))}
                           </div>
                           <button
-                            onClick={() => navigate('/preview-challenge', { state: toPreviewState(challenge) })}
+                            onClick={() => navigate(`/challenges/${challenge.id}/submit`)}
                             className={`p-3 text-white rounded-xl transition-colors shadow-lg group-hover:scale-105 ${
                               isOpen
                                 ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
@@ -412,7 +412,7 @@ export function Challenges() {
                       <div className="flex items-center justify-between mt-auto">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{challenge.language}</span>
                         <button
-                          onClick={() => navigate('/preview-challenge', { state: toPreviewState(challenge) })}
+                          onClick={() => navigate(`/challenges/${challenge.id}/submit`)}
                           className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${
                             isOpen ? 'text-blue-500 hover:text-blue-400' : 'text-slate-400 hover:text-slate-200'
                           }`}

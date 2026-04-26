@@ -272,7 +272,7 @@ export function SubmitChallenge() {
   if (!user) {
     return (
       <SignInGate
-        onBack={() => navigate(`/preview-challenge?id=${challengeId}`)}
+        onBack={() => navigate('/challenges')}
       />
     );
   }
@@ -351,6 +351,47 @@ export function SubmitChallenge() {
         )}
 
         <div className="space-y-6">
+          {/* Challenge details (description + requirements + tags) */}
+          <div className="rounded-2xl bg-slate-900/50 border border-slate-800 p-6 space-y-5">
+            <div>
+              <h3 className="text-sm font-bold text-slate-300 mb-2 uppercase tracking-wider">Description</h3>
+              <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                {challenge.description}
+              </p>
+            </div>
+
+            {challenge.requirements && (
+              <div>
+                <h3 className="text-sm font-bold text-slate-300 mb-2 uppercase tracking-wider">Requirements</h3>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  {challenge.requirements}
+                </p>
+              </div>
+            )}
+
+            {challenge.tags.length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-slate-300 mb-2 uppercase tracking-wider">Tags</h3>
+                <div className="flex flex-wrap gap-2">
+                  {challenge.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2 py-1 bg-slate-800 text-slate-300 rounded-lg text-xs font-medium"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {challenge.estimatedTime && (
+              <div className="text-xs text-slate-500">
+                Estimated time: <span className="text-slate-300 font-medium">{challenge.estimatedTime}</span>
+              </div>
+            )}
+          </div>
+
           {/* Zip upload */}
           <Section title="1. Upload your project (.zip)" subtitle={`Up to ${formatBytes(MAX_ZIP_BYTES)}. Exclude node_modules.`}>
             {submission?.zipFileName && !zipFile && (

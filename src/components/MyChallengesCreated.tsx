@@ -128,7 +128,7 @@ function ChallengeRow({ c, onGrade }: { c: MyCreatedChallenge; onGrade: () => vo
       </div>
       <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate(`/preview-challenge`, { state: { challengeId: c.id } })}
+          onClick={() => navigate(`/challenges/${c.id}/submit`)}
           className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold transition-colors"
         >
           View
