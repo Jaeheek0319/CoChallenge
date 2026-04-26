@@ -10,7 +10,7 @@ import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
 import { PublicProfile } from './pages/PublicProfile';
-import { Trophy, Layout, Globe, LogOut, Sparkles, User } from 'lucide-react';
+import { Trophy, Layout, Globe, LogOut, Sparkles, User, GraduationCap, CircleStar } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { UserSearch } from './components/UserSearch';
@@ -59,11 +59,11 @@ export default function App() {
                       Generation
                     </Link>
                     <Link to="/challenges" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                      <Globe className="w-4 h-4" />
+                      <CircleStar className="w-4 h-4" />
                       Challenges
                     </Link>
                     <Link to="/school" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                      <Globe className="w-4 h-4" />
+                      <GraduationCap className="w-4 h-4" />
                       School
                     </Link>
                   </div>
