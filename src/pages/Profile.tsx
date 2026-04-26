@@ -139,7 +139,6 @@ export function Profile() {
   const urlError = (u: string) => (validateUrl(u) ? null : 'Must start with http:// or https://');
 
   const linkedinErr = urlError(draft.linkedinUrl);
-  const githubErr = urlError(draft.githubUrl);
   const twitterErr = urlError(draft.twitterUrl);
 
   const usernameLocalErr = useMemo(
@@ -187,7 +186,7 @@ export function Profile() {
     usernameStatus.kind === 'taken' ||
     usernameStatus.kind === 'checking';
 
-  const hasErr = !!(linkedinErr || githubErr || twitterErr) || usernameBlocksSave;
+  const hasErr = !!(linkedinErr || twitterErr) || usernameBlocksSave;
 
   const save = async () => {
     if (hasErr) return;
@@ -281,7 +280,6 @@ export function Profile() {
               <Field label="Bio" value={profile?.bio} placeholder="No bio yet" multiline />
             </div>
             <SocialField label="LinkedIn" url={profile?.linkedinUrl} Icon={Linkedin} />
-            <SocialField label="GitHub" url={profile?.githubUrl} Icon={Github} />
             <SocialField label="Twitter" url={profile?.twitterUrl} Icon={Twitter} />
           </div>
         )}
@@ -289,49 +287,69 @@ export function Profile() {
         {!loading && !editing && (
           <div className="mt-8 pt-8 border-t border-slate-800">
             <h3 className="text-xl font-semibold text-white mb-4">Integrations</h3>
-            <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
-                  <Github className="w-6 h-6 text-white" />
+            <div className="flex flex-col gap-4">
+              <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+                    <Github className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium">GitHub Connection</h4>
+                    <p className="text-sm text-slate-400">
+                      {profile?.githubAccessToken 
+                        ? 'Connected. You can now export projects to your repositories.' 
+                        : 'Connect your account to export projects directly to GitHub.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-white font-medium">GitHub Connection</h4>
-                  <p className="text-sm text-slate-400">
-                    {profile?.githubAccessToken 
-                      ? 'Connected. You can now export projects to your repositories.' 
-                      : 'Connect your account to export projects directly to GitHub.'}
-                  </p>
-                </div>
+                {profile?.githubAccessToken ? (
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await api.post('/api/auth/github/disconnect', {});
+                        window.location.reload();
+                      } catch (err) {
+                        alert('Failed to disconnect GitHub');
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-sm text-white hover:text-red-400 border border-slate-700 hover:border-red-500/50 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const { url } = await api.get<{url: string}>('/api/auth/github/url');
+                        window.location.href = url;
+                      } catch (err) {
+                        alert('Failed to get GitHub Auth URL. Is GITHUB_CLIENT_ID set in .env?');
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm text-white font-medium transition-colors whitespace-nowrap"
+                  >
+                    Connect to GitHub
+                  </button>
+                )}
               </div>
-              {profile?.githubAccessToken ? (
-                <button 
-                  onClick={async () => {
-                    try {
-                      await api.post('/api/auth/github/disconnect', {});
-                      window.location.reload();
-                    } catch (err) {
-                      alert('Failed to disconnect GitHub');
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-sm text-white hover:text-red-400 border border-slate-700 hover:border-red-500/50 transition-colors"
-                >
-                  Disconnect
-                </button>
-              ) : (
-                <button 
-                  onClick={async () => {
-                    try {
-                      const { url } = await api.get<{url: string}>('/api/auth/github/url');
-                      window.location.href = url;
-                    } catch (err) {
-                      alert('Failed to get GitHub Auth URL. Is GITHUB_CLIENT_ID set in .env?');
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm text-white font-medium transition-colors whitespace-nowrap"
-                >
-                  Connect to GitHub
-                </button>
-              )}
+              <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-6">
+                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                  <Github className="w-4 h-4" />
+                  GitHub Profile
+                </h3>
+                {profile?.githubAccessToken && profile?.githubUrl ? (
+                  <a
+                    href={profile.githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-lg text-sky-400 hover:text-sky-300 break-all"
+                  >
+                    {profile.githubUrl}
+                  </a>
+                ) : (
+                  <p className="text-lg text-slate-500 italic">Connect your GitHub to see</p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -370,15 +388,7 @@ export function Profile() {
               placeholder="https://linkedin.com/in/you"
               error={linkedinErr}
             />
-            <InputField
-              label="GitHub"
-              icon={<Github className="w-4 h-4" />}
-              value={draft.githubUrl}
-              onChange={(v) => updateDraft({ githubUrl: v })}
-              maxLength={LIMITS.url}
-              placeholder="https://github.com/you"
-              error={githubErr}
-            />
+
             <InputField
               label="Twitter"
               icon={<Twitter className="w-4 h-4" />}

@@ -367,7 +367,7 @@ app.post('/api/auth/github/disconnect', requireAuth, async (req, res) => {
     const db = await getDb();
     await db.collection<ProfileDoc>('profiles').updateOne(
       { _id: req.userId! },
-      { $unset: { githubAccessToken: "" } }
+      { $unset: { githubAccessToken: "", githubUrl: "" } }
     );
     res.json({ success: true });
   } catch (err) {
