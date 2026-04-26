@@ -7,8 +7,9 @@ import {
   Play, RotateCcw, Save, Trash2, 
   ChevronLeft, ChevronRight, HelpCircle, 
   Layout, Code, Eye, MessageSquare, 
-  Sparkles, CheckCircle2, AlertCircle, Terminal
+  Sparkles, CheckCircle2, AlertCircle, Terminal, Github, Loader2
 } from 'lucide-react';
+import { api } from '../lib/api';
 import { useProjects } from '../hooks/useProjects';
 import { UserProject, ProjectFile } from '../types';
 import { getAIHelp, checkStepCompletion } from '../services/gemini';
@@ -36,6 +37,7 @@ export function Workspace() {
   const [stepFeedback, setStepFeedback] = useState<{isComplete: boolean, message: string} | null>(null);
   const [consoleOutput, setConsoleOutput] = useState<string>('');
   const [isPyodideReady, setIsPyodideReady] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const lastLoadedProjectId = useRef<string | null>(null);
   const pyodideRef = useRef<any>(null);
@@ -266,6 +268,22 @@ builtins.input = async_input
     const blob = new Blob([combinedHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     setPreviewUrl(url);
+  };
+
+  const handleExport = async () => {
+    if (!project || isExporting) return;
+    
+    setIsExporting(true);
+    try {
+      const res = await api.post<{success: boolean, url: string}>(`/api/projects/${project.id}/export`, {});
+      if (res.success) {
+        window.open(res.url, '_blank');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Export failed. Ensure you are connected to GitHub in your Profile.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleFileChange = (value: string | undefined) => {
@@ -499,6 +517,22 @@ builtins.input = async_input
           </div>
 
           <div className="flex items-center gap-3">
+            {currentStep === project.steps.length - 1 && completedSteps.includes(currentStep) && (
+              <motion.button 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={handleExport}
+                disabled={isExporting}
+                className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-md text-sm font-bold transition-all shadow-lg shadow-slate-900/20 active:scale-95 disabled:opacity-50 border border-slate-700"
+              >
+                {isExporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                ) : (
+                  <Github className="w-4 h-4" />
+                )}
+                {isExporting ? 'Exporting...' : 'Export to GitHub'}
+              </motion.button>
+            )}
             <button 
               onClick={handleRun}
               className="flex items-center gap-2 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-md text-sm font-bold transition-all shadow-lg shadow-green-900/20 active:scale-95"
