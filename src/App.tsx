@@ -58,13 +58,13 @@ export default function App() {
                       <Sparkles className="w-4 h-4" />
                       Generation
                     </Link>
-                    <Link to="/challenges" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                      <CircleStar className="w-4 h-4" />
-                      Challenges
-                    </Link>
                     <Link to="/school" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <GraduationCap className="w-4 h-4" />
                       School
+                    </Link>
+                    <Link to="/challenges" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                      <CircleStar className="w-4 h-4" />
+                      Challenges
                     </Link>
                   </div>
                 </div>

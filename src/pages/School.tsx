@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Globe, Heart, Users, Star, ArrowRight, Code, Search, ChevronDown } from 'lucide-react';
+import { GraduationCap, Heart, Users, Star, ArrowRight, Code, Search, ChevronDown } from 'lucide-react';
 
 const PRESET_PROJECTS = [
   {
@@ -86,7 +86,7 @@ export function School() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
         <div className="max-w-2xl">
           <div className="flex items-center gap-2 text-blue-500 mb-3 font-bold text-sm tracking-widest uppercase">
-            <Globe className="w-4 h-4" />
+            <GraduationCap className="w-4 h-4" />
             Curated Community
           </div>
           <h1 className="text-4xl font-bold mb-2">School</h1>
