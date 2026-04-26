@@ -2,3 +2,5 @@ flask
 flask-cors
 google-genai
 python-dotenv
+google-adk
+asgiref
