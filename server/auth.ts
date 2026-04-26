@@ -6,6 +6,7 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
+      userEmail?: string;
     }
   }
 }
@@ -49,9 +50,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       if (err || !decoded || typeof decoded === 'string') {
         return res.status(401).json({ error: 'invalid token', detail: err?.message });
       }
-      const sub = (decoded as { sub?: string }).sub;
-      if (!sub) return res.status(401).json({ error: 'invalid token: no sub claim' });
-      req.userId = sub;
+      const claims = decoded as { sub?: string; email?: string };
+      if (!claims.sub) return res.status(401).json({ error: 'invalid token: no sub claim' });
+      req.userId = claims.sub;
+      req.userEmail = claims.email;
       next();
     }
   );

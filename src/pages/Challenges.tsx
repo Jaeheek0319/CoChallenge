@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Globe, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User } from 'lucide-react';
+import { Globe, Heart, Users, ArrowRight, BadgeCheck, Building2, ChevronRight, ChevronLeft, User } from 'lucide-react';
+import { SubmitChallengeModal } from '../components/SubmitChallengeModal';
 
 const FEATURED_CHALLENGES = [
   {
@@ -100,6 +101,7 @@ const COMMUNITY_CHALLENGES = [
 export function Challenges() {
   const navigate = useNavigate();
   const carouselRef = useRef<HTMLDivElement>(null);
+  const [isSubmitOpen, setIsSubmitOpen] = useState(false);
 
   const scrollLeft = () => {
     if (carouselRef.current) {
@@ -124,10 +126,16 @@ export function Challenges() {
           </div>
           <h1 className="text-4xl font-bold mb-2">Build Real-World Projects</h1>
           <p className="text-slate-400 font-medium">
-            Tackle challenges posted by top companies or explore our community-driven project ideas. 
+            Tackle challenges posted by top companies or explore our community-driven project ideas.
             Pick one and our AI will guide you through building it.
           </p>
         </div>
+        <button
+          onClick={() => setIsSubmitOpen(true)}
+          className="self-start md:self-auto bg-white text-slate-950 hover:bg-slate-200 px-6 py-3 rounded-xl font-bold transition-all active:scale-95 whitespace-nowrap"
+        >
+          Submit Challenge
+        </button>
       </div>
 
       {/* Featured/Verified Carousel Section */}
@@ -266,15 +274,10 @@ export function Challenges() {
         </div>
       </div>
       
-      {/* Call to Action */}
-      <div className="mt-20 text-center p-12 glass-panel rounded-3xl border-dashed">
-        <Code className="w-12 h-12 text-slate-800 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Have a challenge idea?</h2>
-        <p className="text-slate-500 mb-8 max-w-sm mx-auto">Create and share your own coding challenges with the community.</p>
-        <button className="bg-white text-slate-950 hover:bg-slate-200 px-8 py-3 rounded-xl font-bold transition-all active:scale-95">
-          Submit Challenge
-        </button>
-      </div>
+      <SubmitChallengeModal
+        isOpen={isSubmitOpen}
+        onClose={() => setIsSubmitOpen(false)}
+      />
     </div>
   );
 }
