@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { CircleStar, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search, ChevronDown, Loader2, Sparkles } from 'lucide-react';
+import { CircleStar, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search, ChevronDown, Loader2, Sparkles, CalendarDays, Eye } from 'lucide-react';
 import { api } from '../lib/api';
+
+type ChallengeState = 'open' | 'closed' | 'graded';
 
 interface ApiChallenge {
   id: string;
@@ -23,16 +25,23 @@ interface ApiChallenge {
   logoUrl: string | null;
   likes: number;
   dueDate: string;
-  state: 'open' | 'closed' | 'graded';
+  state: ChallengeState;
   createdAt: string;
 }
 
 const FALLBACK_LOGO_GRADIENT = 'from-slate-700 to-slate-900';
 
+function getChallengeState(c: ApiChallenge): ChallengeState {
+  if (c.state === 'graded') return 'graded';
+  const due = Date.parse(c.dueDate);
+  if (Number.isFinite(due) && Date.now() >= due) return 'closed';
+  return c.state;
+}
+
 function toPreviewState(c: ApiChallenge) {
   return {
     challengeId: c.id,
-    state: c.state,
+    state: getChallengeState(c),
     dueDate: c.dueDate,
     title: c.title,
     description: c.description,
@@ -46,6 +55,40 @@ function toPreviewState(c: ApiChallenge) {
     isCompanyChallenge: Boolean(c.company),
     companyName: c.company?.name,
   };
+}
+
+function formatDueDate(iso: string): string {
+  const due = Date.parse(iso);
+  if (!Number.isFinite(due)) return 'Due date TBD';
+  return `Due ${new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(due))}`;
+}
+
+function StateBadge({ state }: { state: ChallengeState }) {
+  const map = {
+    open: {
+      label: 'Open',
+      className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300',
+    },
+    closed: {
+      label: 'Closed',
+      className: 'bg-amber-500/10 border-amber-500/20 text-amber-300',
+    },
+    graded: {
+      label: 'Graded',
+      className: 'bg-violet-500/10 border-violet-500/20 text-violet-300',
+    },
+  };
+  const badge = map[state];
+  return (
+    <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
+      {badge.label}
+    </span>
+  );
 }
 
 function matchesSearch(c: ApiChallenge, query: string, filter: string, userField: string): boolean {
@@ -92,10 +135,12 @@ export function Challenges() {
 
   const featured = challenges
     .filter((c) => c.verified)
+    .filter((c) => getChallengeState(c) !== 'graded')
     .filter((c) => matchesSearch(c, searchQuery, searchFilter, c.company?.name ?? ''));
 
   const community = challenges
     .filter((c) => !c.verified)
+    .filter((c) => getChallengeState(c) !== 'graded')
     .filter((c) => matchesSearch(c, searchQuery, searchFilter, c.authorUsername));
 
   const scrollLeft = () => {
@@ -121,6 +166,13 @@ export function Challenges() {
             Pick one and our AI will guide you through building it.
           </p>
         </div>
+        <Link
+          to="/challenges/past"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900/50 text-sm font-bold text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-800 transition-colors"
+        >
+          <CalendarDays className="w-4 h-4" />
+          Past challenges
+        </Link>
       </div>
 
       {/* Search Bar & Filters */}
@@ -216,15 +268,23 @@ export function Challenges() {
                 {featured.map((challenge, idx) => {
                   const companyName = challenge.company?.name ?? 'Company';
                   const companyRole = challenge.company?.role ?? '';
+                  const state = getChallengeState(challenge);
+                  const isOpen = state === 'open';
                   return (
                     <motion.div
                       key={challenge.id}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.1 }}
-                      className="min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden hover:border-indigo-500/50 transition-all border-b-4 border-b-transparent hover:border-b-indigo-500 relative flex flex-col hover:scale-105 hover:bg-slate-800/50 hover:z-10"
+                      className={`min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden transition-all border-b-4 relative flex flex-col hover:z-10 ${
+                        isOpen
+                          ? 'hover:border-indigo-500/50 border-b-transparent hover:border-b-indigo-500 hover:scale-105 hover:bg-slate-800/50'
+                          : 'border-slate-800/80 border-b-slate-700 opacity-80'
+                      }`}
                     >
-                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      {isOpen && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      )}
 
                       <div className="p-8 relative z-10 flex flex-col h-full">
                         <div className="flex items-start justify-between mb-6">
@@ -248,6 +308,14 @@ export function Challenges() {
                           </span>
                         </div>
 
+                        <div className="flex flex-wrap items-center gap-2 mb-4">
+                          <StateBadge state={state} />
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                            <CalendarDays className="w-3.5 h-3.5" />
+                            {formatDueDate(challenge.dueDate)}
+                          </span>
+                        </div>
+
                         <h3 className="text-2xl font-bold mb-3 group-hover:text-indigo-400 transition-colors">{challenge.title}</h3>
                         <p className="text-sm text-slate-400 mb-8 leading-relaxed line-clamp-3 flex-grow">{challenge.description}</p>
 
@@ -261,9 +329,14 @@ export function Challenges() {
                           </div>
                           <button
                             onClick={() => navigate('/preview-challenge', { state: toPreviewState(challenge) })}
-                            className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors shadow-lg shadow-indigo-900/20 group-hover:scale-105"
+                            className={`p-3 text-white rounded-xl transition-colors shadow-lg group-hover:scale-105 ${
+                              isOpen
+                                ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
+                                : 'bg-slate-800 hover:bg-slate-700 shadow-slate-950/20'
+                            }`}
+                            aria-label={isOpen ? 'Start challenge' : 'View challenge'}
                           >
-                            <ArrowRight className="w-5 h-5" />
+                            {isOpen ? <ArrowRight className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                           </button>
                         </div>
                       </div>
@@ -294,44 +367,70 @@ export function Challenges() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {community.map((challenge, idx) => (
-                  <motion.div
-                    key={challenge.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="group glass-panel rounded-2xl p-6 hover:border-slate-600 transition-all border-b-2 hover:border-b-blue-500 flex flex-col h-full hover:scale-105 hover:bg-slate-800/50 hover:z-10"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <Link 
-                        to={`/u/${challenge.authorUsername}`}
-                        className="flex items-center gap-2 group/author"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center group-hover/author:bg-slate-700 transition-colors">
-                          <User className="w-3 h-3 text-slate-400 group-hover/author:text-blue-400 transition-colors" />
+                {community.map((challenge, idx) => {
+                  const state = getChallengeState(challenge);
+                  const isOpen = state === 'open';
+                  return (
+                    <motion.div
+                      key={challenge.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`group glass-panel rounded-2xl p-6 transition-all border-b-2 flex flex-col h-full ${
+                        isOpen
+                          ? 'hover:border-slate-600 hover:border-b-blue-500 hover:scale-105 hover:bg-slate-800/50 hover:z-10'
+                          : 'border-slate-800/80 border-b-slate-700 opacity-80'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-4 gap-3">
+                        <Link 
+                          to={`/u/${challenge.authorUsername}`}
+                          className="min-w-0 flex items-center gap-2 group/author"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center group-hover/author:bg-slate-700 transition-colors shrink-0">
+                            <User className="w-3 h-3 text-slate-400 group-hover/author:text-blue-400 transition-colors" />
+                          </div>
+                          <span className="text-xs font-medium text-slate-400 group-hover/author:text-blue-400 transition-colors truncate">@{challenge.authorUsername}</span>
+                        </Link>
+                        <div className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                          <Heart className="w-3.5 h-3.5 hover:fill-red-500 hover:text-red-500 cursor-pointer transition-colors" />
+                          {challenge.likes}
                         </div>
-                        <span className="text-xs font-medium text-slate-400 group-hover/author:text-blue-400 transition-colors">@{challenge.authorUsername}</span>
-                      </Link>
-                      <div className="flex items-center gap-1 text-xs text-slate-500">
-                        <Heart className="w-3.5 h-3.5 hover:fill-red-500 hover:text-red-500 cursor-pointer transition-colors" />
-                        {challenge.likes}
                       </div>
-                    </div>
 
-                    <h3 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors">{challenge.title}</h3>
-                    <p className="text-sm text-slate-400 mb-6 flex-grow line-clamp-3">{challenge.description}</p>
+                      <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <StateBadge state={state} />
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                          <CalendarDays className="w-3.5 h-3.5" />
+                          {formatDueDate(challenge.dueDate)}
+                        </span>
+                      </div>
 
-                    <div className="flex items-center justify-between mt-auto">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{challenge.language}</span>
-                      <button
-                        onClick={() => navigate('/preview-challenge', { state: toPreviewState(challenge) })}
-                        className="flex items-center gap-1.5 text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors"
-                      >
-                        Start <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
+                      <h3 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors">{challenge.title}</h3>
+                      <p className="text-sm text-slate-400 mb-6 flex-grow line-clamp-3">{challenge.description}</p>
+
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{challenge.language}</span>
+                        <button
+                          onClick={() => navigate('/preview-challenge', { state: toPreviewState(challenge) })}
+                          className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${
+                            isOpen ? 'text-blue-500 hover:text-blue-400' : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {isOpen ? (
+                            <>
+                              Start <ArrowRight className="w-3.5 h-3.5" />
+                            </>
+                          ) : (
+                            <>
+                              View <Eye className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </div>

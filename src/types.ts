@@ -1,4 +1,4 @@
-export type Language = 'html-css-js' | 'python' | 'react';
+export type Language = 'html-css-js' | 'python' | 'react' | 'c' | 'cpp';
 export type Difficulty = 'Beginner' | 'Intermediate' | 'Advanced';
 
 export interface ProjectFile {

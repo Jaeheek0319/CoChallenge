@@ -35,6 +35,11 @@ interface ProfileDoc {
   updatedAt: string;
 }
 
+interface ChallengeDoc {
+  _id: string;
+  title: string;
+}
+
 // Deterministic UUIDs derived from email so re-running is idempotent.
 function stableUserId(email: string): string {
   const h = createHash('sha256').update(email).digest('hex');
@@ -101,7 +106,7 @@ const SEED_SUBMITTERS: SeedSubmitter[] = [
 
 async function main() {
   const db = await getDb();
-  const challenge = await db.collection('challenges').findOne({ _id: CHALLENGE_ID });
+  const challenge = await db.collection<ChallengeDoc>('challenges').findOne({ _id: CHALLENGE_ID });
   if (!challenge) {
     console.error(`Challenge ${CHALLENGE_ID} not found.`);
     process.exit(1);
