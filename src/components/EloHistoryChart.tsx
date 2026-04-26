@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, TrendingUp } from 'lucide-react';
 import { api } from '../lib/api';
 import { usersApi } from '../lib/usersApi';
+import { EloRankBadge } from './EloRankBadge';
 
 interface EloChange {
   id: string;
@@ -260,7 +261,9 @@ function Header({ current, delta }: { current?: number; delta?: number } = {}) {
         <div className="flex items-center gap-3 text-sm">
           <div>
             <span className="text-slate-500">Current</span>
-            <span className="ml-2 font-bold text-white">{current}</span>
+            <div className="ml-2 inline-flex">
+              <EloRankBadge elo={current} compact />
+            </div>
           </div>
           <div>
             <span

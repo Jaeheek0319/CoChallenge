@@ -16,6 +16,7 @@ import { SchoolProjectPreview } from './pages/SchoolProjectPreview';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
 import { PublicProfile } from './pages/PublicProfile';
+import { Leaderboard } from './pages/Leaderboard';
 import { Trophy, Layout, Globe, LogOut, Sparkles, Swords, ClipboardList, User, GraduationCap, CircleStar } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
@@ -94,6 +95,10 @@ export default function App() {
                   <Link to="/challenges" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                     <CircleStar className="w-4 h-4" />
                     Challenges
+                  </Link>
+                  <Link to="/leaderboard" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4" />
+                    Leaderboard
                   </Link>
                 </div>
               </div>
@@ -216,6 +221,7 @@ export default function App() {
             <Route path="/school" element={<School />} />
             <Route path="/school/:id" element={<SchoolProjectPreview />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/u/:username" element={<PublicProfile />} />
           </Routes>
         </main>

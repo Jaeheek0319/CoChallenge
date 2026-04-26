@@ -33,7 +33,17 @@ export interface PublicEloChange {
   createdAt: string;
 }
 
+export interface LeaderboardUser {
+  username: string;
+  fullName: string;
+  avatarUrl: string;
+  elo: number;
+  globalRank: number;
+  updatedAt: string;
+}
+
 export const usersApi = {
+  leaderboard: () => getJson<LeaderboardUser[]>('/api/leaderboard'),
   search: (q: string) => getJson<PublicUser[]>(`/api/users/search?q=${encodeURIComponent(q)}`),
   get: (username: string) => getJson<PublicUserProfile>(`/api/users/${encodeURIComponent(username)}`),
   projects: (username: string) =>

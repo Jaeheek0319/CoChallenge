@@ -8,6 +8,7 @@ import { UserChallengesList } from '../components/UserChallengesList';
 import { ProjectDial } from '../components/ProjectDial';
 import { WinsDial } from '../components/WinsDial';
 import { EloHistoryChart } from '../components/EloHistoryChart';
+import { EloRankBadge } from '../components/EloRankBadge';
 
 const EMPTY_WINS = {
   byDifficulty: { Beginner: 0, Intermediate: 0, Advanced: 0 },
@@ -132,7 +133,10 @@ export function PublicProfile() {
 
         <div className="flex-1 min-w-0">
           <h1 className="text-3xl font-semibold text-white">{displayName}</h1>
-          <p className="text-sm text-slate-400 mt-1">@{profile.username}</p>
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            <p className="text-sm text-slate-400">@{profile.username}</p>
+            <EloRankBadge elo={profile.elo} overallRank={profile.globalRank} compact />
+          </div>
           {profile.bio && (
             <p className="text-slate-300 mt-4 whitespace-pre-wrap">{profile.bio}</p>
           )}

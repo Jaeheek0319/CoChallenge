@@ -423,6 +423,17 @@ function submissionToResponse(doc: SubmissionDoc) {
   return { id: _id, ...rest };
 }
 
+async function globalEloRank(userId: string, elo: number): Promise<number> {
+  const db = await getDb();
+  const higherElo = await db
+    .collection<ProfileDoc>('profiles')
+    .countDocuments({ elo: { $gt: elo } });
+  const tiedAhead = await db
+    .collection<ProfileDoc>('profiles')
+    .countDocuments({ elo, _id: { $lt: userId } });
+  return higherElo + tiedAhead + 1;
+}
+
 interface ProfileDoc {
   _id: string;
   userId: string;
@@ -598,7 +609,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     // Backfill any missing fields (elo, etc.) for older profiles
     const profile: ProfileDoc = { ...emptyProfile(req.userId!, doc.username), ...doc };
     const { _id, userId, ...rest } = profile;
-    res.json(rest);
+    res.json({ ...rest, globalRank: await globalEloRank(userId, profile.elo) });
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
   }
@@ -1026,7 +1037,7 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
   }
 });
 
-function publicProfile(doc: ProfileDoc) {
+async function publicProfile(doc: ProfileDoc) {
   return {
     username: doc.username,
     fullName: doc.fullName,
@@ -1035,6 +1046,8 @@ function publicProfile(doc: ProfileDoc) {
     linkedinUrl: doc.linkedinUrl,
     githubUrl: doc.githubUrl,
     twitterUrl: doc.twitterUrl,
+    elo: doc.elo,
+    globalRank: await globalEloRank(doc.userId, doc.elo),
     updatedAt: doc.updatedAt,
   };
 }
@@ -1042,6 +1055,34 @@ function publicProfile(doc: ProfileDoc) {
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+app.get('/api/leaderboard', async (_req, res) => {
+  try {
+    const db = await getDb();
+    const docs = await db
+      .collection<ProfileDoc>('profiles')
+      .find({ username: { $type: 'string', $gt: '' } })
+      .toArray();
+    const profiles = docs
+      .map((doc) => ({ ...emptyProfile(doc._id, doc.username), ...doc }))
+      .sort((a, b) => {
+        if (b.elo !== a.elo) return b.elo - a.elo;
+        return a._id.localeCompare(b._id);
+      })
+      .slice(0, 100)
+      .map((doc, index) => ({
+        username: doc.username,
+        fullName: doc.fullName,
+        avatarUrl: doc.avatarUrl,
+        elo: doc.elo,
+        globalRank: index + 1,
+        updatedAt: doc.updatedAt,
+      }));
+    res.json(profiles);
+  } catch (err) {
+    res.status(500).json({ error: 'leaderboard failed', detail: String(err) });
+  }
+});
 
 app.get('/api/users/search', async (req, res) => {
   try {
@@ -1079,7 +1120,8 @@ app.get('/api/users/:username', async (req, res) => {
       .collection<ProfileDoc>('profiles')
       .findOne({ username });
     if (!doc) return res.status(404).json({ error: 'not found' });
-    res.json(publicProfile(doc));
+    const profile: ProfileDoc = { ...emptyProfile(doc._id, doc.username), ...doc };
+    res.json(await publicProfile(profile));
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
   }
