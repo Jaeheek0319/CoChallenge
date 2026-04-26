@@ -48,8 +48,8 @@ export default function App() {
                     <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center group-hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/20">
                       <Trophy className="w-5 h-5 text-white" />
                     </div>
-                    <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                      CoChallenge
+                    <span className="text-xl font-bold tracking-tight">
+                      <span className="text-white">Co</span><span className="text-blue-500">Challenge</span>
                     </span>
                   </Link>
 
