@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
-import { connectToDb, getDb } from './db';
+import { getDb } from './db';
 import { requireAuth } from './auth';
 
 const app = express();
@@ -1573,11 +1573,6 @@ app.get('/api/users/:username/elo-history', async (req, res) => {
 });
 
 const port = Number(process.env.PORT) || 3001;
-connectToDb().then(() => {
-  app.listen(port, () => {
-    console.log(`API listening on http://localhost:${port}`);
-  });
-}).catch(err => {
-  console.error('Failed to connect to database:', err);
-  process.exit(1);
+app.listen(port, () => {
+  console.log(`API listening on http://localhost:${port}`);
 });

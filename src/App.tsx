@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
-const Workspace = lazy(() => import('./pages/Workspace').then(m => ({ default: m.Workspace })));
-const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
-const Challenges = lazy(() => import('./pages/Challenges').then(m => ({ default: m.Challenges })));
-const PastChallenges = lazy(() => import('./pages/PastChallenges').then(m => ({ default: m.PastChallenges })));
-const CreateChallenge = lazy(() => import('./pages/CreateChallenge').then(m => ({ default: m.CreateChallenge })));
-const PreviewChallenge = lazy(() => import('./pages/PreviewChallenge').then(m => ({ default: m.PreviewChallenge })));
-const SubmitChallenge = lazy(() => import('./pages/SubmitChallenge').then(m => ({ default: m.SubmitChallenge })));
-const GradeChallenge = lazy(() => import('./pages/GradeChallenge').then(m => ({ default: m.GradeChallenge })));
-const ChallengeDojoPage = lazy(() => import('./pages/ChallengeDojoPage').then(m => ({ default: m.ChallengeDojoPage })));
-const MyChallenges = lazy(() => import('./pages/MyChallenges').then(m => ({ default: m.MyChallenges })));
-const School = lazy(() => import('./pages/School').then(m => ({ default: m.School })));
-const Generation = lazy(() => import('./pages/Generation').then(m => ({ default: m.Generation })));
-const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
-const PublicProfile = lazy(() => import('./pages/PublicProfile').then(m => ({ default: m.PublicProfile })));
-import { Trophy, Layout, Globe, LogOut, Sparkles, Swords, ClipboardList, User, GraduationCap, CircleStar, Loader2 } from 'lucide-react';
+import { Home } from './pages/Home';
+import { Workspace } from './pages/Workspace';
+import { Dashboard } from './pages/Dashboard';
+import { Challenges } from './pages/Challenges';
+import { PastChallenges } from './pages/PastChallenges';
+import { CreateChallenge } from './pages/CreateChallenge';
+import { PreviewChallenge } from './pages/PreviewChallenge';
+import { SubmitChallenge } from './pages/SubmitChallenge';
+import { GradeChallenge } from './pages/GradeChallenge';
+import { ChallengeDojoPage } from './pages/ChallengeDojoPage';
+import { MyChallenges } from './pages/MyChallenges';
+import { School } from './pages/School';
+import { Generation } from './pages/Generation';
+import { Profile } from './pages/Profile';
+import { PublicProfile } from './pages/PublicProfile';
+import { Trophy, Layout, Globe, LogOut, Sparkles, Swords, ClipboardList, User, GraduationCap, CircleStar } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { UserSearch } from './components/UserSearch';
@@ -198,13 +198,7 @@ export default function App() {
         />
 
         <main>
-          <Suspense fallback={
-            <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-slate-950">
-              <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-              <p className="text-slate-400 font-medium animate-pulse">Loading amazing things...</p>
-            </div>
-          }>
-            <Routes>
+          <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/signup" element={<Home />} />
             <Route path="/workspace/:projectId" element={<Workspace />} />
@@ -222,7 +216,6 @@ export default function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/u/:username" element={<PublicProfile />} />
           </Routes>
-          </Suspense>
         </main>
       </div>
     </ProjectProvider>
