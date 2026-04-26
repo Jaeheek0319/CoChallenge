@@ -5,6 +5,8 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const apiPort =
+    env.API_PORT || process.env.API_PORT || env.PORT || process.env.PORT || '3001';
   return {
     plugins: [react(), tailwindcss()],
     define: {
@@ -20,7 +22,7 @@ export default defineConfig(({mode}) => {
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
-        '/api': 'http://localhost:3001',
+        '/api': `http://localhost:${apiPort}`,
       },
     },
   };

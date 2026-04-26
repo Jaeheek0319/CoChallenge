@@ -31,3 +31,13 @@ export interface UserProject extends GeneratedProject {
   currentStep: number;
   updatedAt: string;
 }
+
+export interface UserProfile {
+  fullName: string;
+  bio: string;
+  avatarUrl: string;
+  linkedinUrl: string;
+  githubUrl: string;
+  twitterUrl: string;
+  updatedAt: string;
+}
