@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowLeft, Plus, X, Sparkles } from 'lucide-react';
+import { api } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const DIFFICULTY_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 const LANGUAGES = [
@@ -16,7 +18,9 @@ const COMMON_TAGS = [
 
 export function CreateChallenge() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -91,22 +95,71 @@ export function CreateChallenge() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setSubmitError(null);
+
     if (!validateForm()) {
       return;
     }
 
+    if (!user) {
+      setSubmitError('Please sign in before submitting a challenge.');
+      return;
+    }
+
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    console.log('Challenge submitted:', formData);
-    setIsSubmitting(false);
-    
-    // Navigate back to challenges with success message
-    navigate('/challenges', { state: { successMessage: 'Challenge created successfully!' } });
+
+    try {
+      const body = {
+        title: formData.title,
+        description: formData.description,
+        language: formData.primaryLanguage,
+        difficulty: formData.difficulty,
+        tags: formData.tags,
+        requirements: formData.requirements,
+        resources: formData.resources,
+        starterCode: formData.starterCode,
+        estimatedTime: formData.estimatedTime,
+        company: formData.isCompanyChallenge
+          ? { name: formData.companyName, role: '' }
+          : undefined,
+      };
+
+      await api.post('/api/challenges', body);
+
+      navigate('/challenges', {
+        state: { successMessage: 'Challenge created successfully!' },
+      });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to submit challenge');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-slate-950 py-12">
+        <div className="max-w-md mx-auto px-6">
+          <div className="glass-panel rounded-2xl p-10 text-center">
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl inline-flex mb-4">
+              <Sparkles className="w-6 h-6 text-blue-400" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Sign in to submit</h1>
+            <p className="text-slate-400 text-sm mb-6">
+              You need an account to share a challenge with the community. Sign in from the
+              top nav and come back.
+            </p>
+            <button
+              onClick={() => navigate('/challenges')}
+              className="w-full h-11 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl transition-colors"
+            >
+              Back to Challenges
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 py-12">
@@ -394,6 +447,12 @@ export function CreateChallenge() {
               </div>
             )}
           </div>
+
+          {submitError && (
+            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300">
+              {submitError}
+            </div>
+          )}
 
           {/* Submit Button */}
           <motion.div
