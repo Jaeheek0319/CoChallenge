@@ -260,9 +260,9 @@ export function Challenges() {
                 </p>
               </div>
             ) : (
-              <div
+            <div
                 ref={carouselRef}
-                className="flex gap-6 overflow-x-auto pt-6 pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
+                className="grid grid-flow-col auto-cols-[320px] md:auto-cols-[400px] items-stretch gap-6 overflow-x-auto pt-6 pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {featured.map((challenge, idx) => {
@@ -276,7 +276,7 @@ export function Challenges() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.1 }}
-                      className={`min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden transition-all border-b-4 relative flex flex-col hover:z-10 ${
+                      className={`min-w-[320px] md:min-w-[400px] h-full snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden transition-all border-b-4 relative flex flex-col hover:z-10 ${
                         isOpen
                           ? 'hover:border-indigo-500/50 border-b-transparent hover:border-b-indigo-500 hover:scale-105 hover:bg-slate-800/50'
                           : 'border-slate-800/80 border-b-slate-700 opacity-80'
@@ -316,7 +316,7 @@ export function Challenges() {
                           </span>
                         </div>
 
-                        <h3 className="text-2xl font-bold mb-3 group-hover:text-indigo-400 transition-colors">{challenge.title}</h3>
+                        <h3 className="text-2xl font-bold mb-3 group-hover:text-indigo-400 transition-colors line-clamp-2">{challenge.title}</h3>
                         <p className="text-sm text-slate-400 mb-8 leading-relaxed line-clamp-3 flex-grow">{challenge.description}</p>
 
                         <div className="flex items-center justify-between mt-auto">
@@ -406,7 +406,7 @@ export function Challenges() {
                         </span>
                       </div>
 
-                      <h3 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors">{challenge.title}</h3>
+                      <h3 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors line-clamp-2">{challenge.title}</h3>
                       <p className="text-sm text-slate-400 mb-6 flex-grow line-clamp-3">{challenge.description}</p>
 
                       <div className="flex items-center justify-between mt-auto">
