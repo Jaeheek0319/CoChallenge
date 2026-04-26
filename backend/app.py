@@ -1,14 +1,26 @@
 from ast import Return
 import os
 import json
+import subprocess
+import tempfile
+import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from flask_socketio import SocketIO, emit
+
+try:
+    import ptyprocess
+    PTY_SUPPORTED = True
+except ImportError:
+    PTY_SUPPORTED = False
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+running_processes = {}
 
 api_key = os.getenv("GEMINI_API_KEY")
 
@@ -19,8 +31,12 @@ try:
     from google.adk.sessions import InMemorySessionService
     from google.genai import types
     import uuid
+    import random
+    import string
     adk_available = True
 except ImportError:
+    import random
+    import string
     print("WARNING: google-adk is not installed or failed to import.")
     adk_available = False
 
@@ -30,7 +46,7 @@ if adk_available:
     agent1_idea = LlmAgent(
         name="Idea_and_Plan_Agent",
         model=MODEL_ID,
-        instruction="You are Step 1 of a pipeline. Generate a project idea and implementation plan for the user's prompt. Output only the plan."
+        instruction="You are Step 1 of a pipeline. Generate a project idea and implementation plan for the user's prompt. Output only the plan. Carefully consider the difficulty specified by the user and elaborate on features. Possible difficulties are Beginner, Intermediate, and Advanced. Projects with higher difficulties should incorporate more features and utilize more advanced features."
     )
 
     agent2_code = LlmAgent(
@@ -49,8 +65,8 @@ if adk_available:
         name="Step_Generator_Agent",
         model=MODEL_ID,
         instruction="""You are Step 4. For each key functional component, create a step according to a JSON format with 'title', 'explanation', 'task', 'hint', 'solution', and 'starterCode'. 
-        CRITICAL TOKEN OPTIMIZATION: 
-        1. Only the VERY FIRST step (index 0) should contain 'starterCode'. This starter code should be a minimal, empty boilerplate (e.g., just the basic HTML structure with no content). 
+        CRITICAL TOKEN OPTIMIZATION & LEARNING ENFORCEMENT: 
+        1. Only the VERY FIRST step (index 0) should contain 'starterCode'. This starter code MUST BE ABSOLUTELY BARE BONES. It MUST NOT contain any project logic, game loops, variables, or solutions. It should ONLY be a basic skeleton (e.g., `<!DOCTYPE html><html>...</html>` or `#include <iostream> int main() { return 0; }`). DO NOT IMPLEMENT THE PROJECT IN THE STARTER CODE.
         2. For ALL subsequent steps (index 1 and above), set 'starterCode' to an empty string (""). 
         This ensures the user starts with a blank slate and their progress is maintained as they move through steps without overwriting their code."""
     )
@@ -59,9 +75,9 @@ if adk_available:
         name="Starter_Code_Refiner_Agent",
         model=MODEL_ID,
         instruction="""You are Step 5. Refine the 'starterCode' for all steps:
-        1. Ensure ONLY step 0 has a non-empty 'starterCode'. This should be a minimal, functional boilerplate (e.g. basic HTML/CSS/JS skeletons but with NO logic or content). 
-        2. For ALL other steps (index 1+), the 'starterCode' MUST be an empty string ("").
-        3. Double check that step 0's starter code is NOT completely empty (it needs minimal structure) but contains no solution code."""
+        1. Ensure ONLY step 0 has a non-empty 'starterCode'. 
+        2. EXTREMELY IMPORTANT: The 'starterCode' for step 0 MUST NOT contain any of the actual project logic or solution. If you see game loops, print statements related to the project, or any completed features in the 'starterCode', YOU MUST DELETE THEM and replace them with a bare minimum empty skeleton. The starter code's purpose is to be a learning tool, so the student must write the logic themselves.
+        3. For ALL other steps (index 1+), the 'starterCode' MUST be exactly an empty string ("")."""
     )
 
     agent6_reviser = LlmAgent(
@@ -69,17 +85,18 @@ if adk_available:
         model=MODEL_ID,
         instruction="""You are Step 6, the final step. Revise the explanation, task, and hint. 
         FINAL QUALITY CHECK: 
-        1. Ensure that ONLY step 0 (index 0) has a non-empty 'starterCode' boilerplate. All other steps MUST have 'starterCode': "". 
-        2. CRITICAL: For step 0, ensure that NONE of the requirements specified in the 'task' are already completed in the 'starterCode'. The starter code should provide ONLY the bare-minimum boilerplate structure required to begin the task.
+        1. Ensure that ONLY step 0 (index 0) has a non-empty 'starterCode'. All other steps MUST have 'starterCode': "". 
+        2. CRITICAL LEARNING ENFORCEMENT: For step 0, ensure the 'starterCode' is strictly an empty starting point (like an empty HTML body or an empty main function). IT MUST NOT CONTAIN THE SOLUTION OR FULFILL ANY TASK REQUIREMENTS. For example, if the project is a guessing game, the starter code MUST NOT have random number generation or loops. It MUST be totally empty of logic.
+        3. CRITICAL: If the Language is Python, use exactly one file named 'main.py'. If C, use exactly one file named 'main.c'. If C++, use exactly one file named 'main.cpp'. If Web, use 'index.html', 'style.css', 'script.js' etc.
         IMPORTANT: Your output MUST be ONLY a JSON object representing a structured project lesson, exactly matching this schema:
         {
           "title": "Project Title",
           "description": "Short description of the project",
+          "language": "the language specified",
+          "difficulty": "the difficulty level",
           "learningGoals": ["Goal 1", "Goal 2"],
           "files": [
-            { "name": "index.html", "language": "html", "content": "..." },
-            { "name": "style.css", "language": "css", "content": "..." },
-            { "name": "script.js", "language": "javascript", "content": "..." }
+            { "name": "filename (e.g. main.py, main.c, main.cpp, or index.html)", "language": "language name", "content": "..." }
           ],
           "steps": [
             {
@@ -116,6 +133,14 @@ async def generate_project():
 
     if not prompt or not language or not difficulty:
         return jsonify({"error": "Missing required fields"}), 400
+
+    # Save metadata before agents begin
+    project_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
+    project_metadata = {
+        "id": project_id,
+        "language": language,
+        "difficulty": difficulty
+    }
 
     full_prompt = f"Topic: {prompt}\nLanguage: {language}\nDifficulty: {difficulty}"
 
@@ -234,14 +259,10 @@ async def generate_project():
         
         project_data = json.loads(final_content)
         
-        import random
-        import string
-        project_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
-        project_data['id'] = project_id
-        project_data['language'] = language
-        project_data['difficulty'] = difficulty
+        # Merge agent output with saved metadata
+        project_metadata.update(project_data)
 
-        return jsonify(project_data)
+        return jsonify(project_metadata)
     except Exception as e:
         print("Failed to generate project:", e)
         return jsonify({"error": "The AI returned an invalid project structure. Please try again."}), 500
@@ -335,5 +356,86 @@ Respond ONLY with a JSON object in this format:
             "feedback": "Failed to evaluate code. Please try again or ask for a hint."
         })
 
+def read_and_forward_pty_output(process, session_id):
+    try:
+        while True:
+            # Read character by character
+            char = process.read(1)
+            if not char:
+                break
+            socketio.emit('terminal_output', {'data': char}, to=session_id)
+    except EOFError:
+        pass
+    except Exception as e:
+        socketio.emit('terminal_output', {'data': f'\r\n[Process Error: {str(e)}]\r\n'}, to=session_id)
+    finally:
+        socketio.emit('terminal_output', {'data': '\r\n[Process exited]\r\n'}, to=session_id)
+        if session_id in running_processes:
+            del running_processes[session_id]
+
+@socketio.on('execute_code')
+def handle_execute_code(data):
+    session_id = request.sid
+    language = data.get('language')
+    code = data.get('code')
+
+    if not PTY_SUPPORTED:
+        emit('terminal_output', {'data': 'Error: ptyprocess not supported on this OS (Windows Native). Please run in WSL.\r\n'})
+        return
+
+    if not language or not code:
+        emit('terminal_output', {'data': 'Error: Missing language or code\r\n'})
+        return
+
+    if language not in ['c', 'cpp', 'c++']:
+        emit('terminal_output', {'data': 'Error: Unsupported language.\r\n'})
+        return
+
+    is_cpp = language in ['cpp', 'c++']
+    extension = '.cpp' if is_cpp else '.c'
+    compiler = 'g++' if is_cpp else 'gcc'
+
+    temp_dir = tempfile.mkdtemp()
+    file_path = os.path.join(temp_dir, f'main{extension}')
+    out_path = os.path.join(temp_dir, 'main')
+
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(code)
+
+    emit('terminal_output', {'data': f'Compiling...\r\n'})
+
+    # Compile
+    compile_process = subprocess.run(
+        [compiler, file_path, '-o', out_path],
+        capture_output=True,
+        text=True
+    )
+
+    if compile_process.returncode != 0:
+        emit('terminal_output', {'data': f'Compilation Error:\r\n{compile_process.stderr.replace(chr(10), chr(13)+chr(10))}'})
+        return
+
+    emit('terminal_output', {'data': 'Compilation successful. Running...\r\n'})
+
+    try:
+        process = ptyprocess.PtyProcessUnicode.spawn([out_path])
+        running_processes[session_id] = process
+        
+        thread = threading.Thread(target=read_and_forward_pty_output, args=(process, session_id))
+        thread.daemon = True
+        thread.start()
+    except Exception as e:
+        emit('terminal_output', {'data': f'Failed to spawn process: {str(e)}\r\n'})
+
+@socketio.on('terminal_input')
+def handle_terminal_input(data):
+    session_id = request.sid
+    char = data.get('char', '')
+    if session_id in running_processes:
+        try:
+            running_processes[session_id].write(char)
+        except Exception as e:
+            print(f"Failed to write to pty: {e}")
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000)

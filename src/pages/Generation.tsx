@@ -170,7 +170,9 @@ export function Generation() {
                     >
                       <option value="html-css-js">JavaScript (Web)</option>
                       <option value="react">React</option>
-                      <option value="python" disabled>Python (Coming soon)</option>
+                      <option value="python">Python</option>
+                      <option value="c">C</option>
+                      <option value="cpp">C++</option>
                     </select>
                   </div>
 

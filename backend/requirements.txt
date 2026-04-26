@@ -4,3 +4,6 @@ google-genai
 python-dotenv
 google-adk
 asgiref
+flask-socketio
+ptyprocess
+simple-websocket
