@@ -11,6 +11,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { profileApi } from '../lib/profileApi';
+import { api } from '../lib/api';
 import { uploadAvatar, deleteAvatar } from '../lib/avatarApi';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import type { UserProfile } from '../types';
@@ -201,6 +202,56 @@ export function Profile() {
             <SocialField label="LinkedIn" url={profile?.linkedinUrl} Icon={Linkedin} />
             <SocialField label="GitHub" url={profile?.githubUrl} Icon={Github} />
             <SocialField label="Twitter" url={profile?.twitterUrl} Icon={Twitter} />
+          </div>
+        )}
+
+        {!loading && !editing && (
+          <div className="mt-8 pt-8 border-t border-slate-800">
+            <h3 className="text-xl font-semibold text-white mb-4">Integrations</h3>
+            <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+                  <Github className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-white font-medium">GitHub Connection</h4>
+                  <p className="text-sm text-slate-400">
+                    {profile?.githubAccessToken 
+                      ? 'Connected. You can now export projects to your repositories.' 
+                      : 'Connect your account to export projects directly to GitHub.'}
+                  </p>
+                </div>
+              </div>
+              {profile?.githubAccessToken ? (
+                <button 
+                  onClick={async () => {
+                    try {
+                      await api.post('/api/auth/github/disconnect', {});
+                      window.location.reload();
+                    } catch (err) {
+                      alert('Failed to disconnect GitHub');
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-sm text-white hover:text-red-400 border border-slate-700 hover:border-red-500/50 transition-colors"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button 
+                  onClick={async () => {
+                    try {
+                      const { url } = await api.get<{url: string}>('/api/auth/github/url');
+                      window.location.href = url;
+                    } catch (err) {
+                      alert('Failed to get GitHub Auth URL. Is GITHUB_CLIENT_ID set in .env?');
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm text-white font-medium transition-colors whitespace-nowrap"
+                >
+                  Connect to GitHub
+                </button>
+              )}
+            </div>
           </div>
         )}
 

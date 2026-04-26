@@ -74,6 +74,7 @@ interface ProfileDoc {
   linkedinUrl: string;
   githubUrl: string;
   twitterUrl: string;
+  githubAccessToken?: string;
   updatedAt: string;
 }
 
@@ -158,12 +159,96 @@ app.put('/api/profile', requireAuth, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
     const db = await getDb();
+    
+    // Preserve githubAccessToken if it exists
+    const existing = await db.collection<ProfileDoc>('profiles').findOne({ _id: req.userId! });
+    if (existing?.githubAccessToken) {
+      doc.githubAccessToken = existing.githubAccessToken;
+    }
+
     await db
       .collection<ProfileDoc>('profiles')
       .replaceOne({ _id: req.userId! }, doc, { upsert: true });
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'save failed', detail: String(err) });
+  }
+});
+
+// GitHub OAuth Integration
+app.get('/api/auth/github/url', requireAuth, (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) return res.status(500).json({ error: 'GITHUB_CLIENT_ID not configured' });
+  // We use the userId as the state to know who is connecting
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&state=${req.userId}&scope=repo`;
+  res.json({ url });
+});
+
+app.get('/api/auth/github/callback', async (req, res) => {
+  const { code, state: userId } = req.query;
+  if (!code || !userId) return res.redirect('/profile?error=missing_code_or_state');
+
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+  try {
+    // Exchange code for access token
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+      }),
+    });
+    
+    const tokenData = await tokenRes.json();
+    if (tokenData.error) {
+      console.error('GitHub Token Error:', tokenData);
+      return res.redirect('/profile?error=github_token_error');
+    }
+
+    const accessToken = tokenData.access_token;
+    
+    // Fetch GitHub User Info
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const githubUser = await userRes.json();
+
+    const db = await getDb();
+    const existing = await db.collection<ProfileDoc>('profiles').findOne({ _id: String(userId) });
+    
+    const updateDoc = {
+      ...emptyProfile(String(userId)),
+      ...existing,
+      githubAccessToken: accessToken,
+      githubUrl: existing?.githubUrl || githubUser.html_url || '',
+    };
+
+    await db.collection<ProfileDoc>('profiles').replaceOne({ _id: String(userId) }, updateDoc as ProfileDoc, { upsert: true });
+    
+    res.redirect('/profile?github_connected=true');
+  } catch (err) {
+    console.error('GitHub Callback Error:', err);
+    res.redirect('/profile?error=github_callback_failed');
+  }
+});
+
+app.post('/api/auth/github/disconnect', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    await db.collection<ProfileDoc>('profiles').updateOne(
+      { _id: req.userId! },
+      { $unset: { githubAccessToken: "" } }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'disconnect failed', detail: String(err) });
   }
 });
 
@@ -218,6 +303,80 @@ app.delete('/api/projects/:id', requireAuth, async (req, res) => {
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'delete failed', detail: String(err) });
+  }
+});
+
+app.post('/api/projects/:id/export', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = await db.collection<ProfileDoc>('profiles').findOne({ _id: req.userId! });
+    
+    if (!profile?.githubAccessToken) {
+      return res.status(400).json({ error: 'GitHub account not connected' });
+    }
+
+    const project = await db.collection<ProjectDoc>('projects').findOne({ _id: req.params.id, userId: req.userId! });
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const repoName = project.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'lahacks-project';
+    const repoDescription = project.description || 'Exported project from LaHacks Learning Dashboard';
+
+    // 1. Create Repository
+    const createRepoRes = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${profile.githubAccessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: repoName,
+        description: repoDescription,
+        private: false,
+        auto_init: true,
+      }),
+    });
+
+    const repoData = await createRepoRes.json();
+    if (createRepoRes.status !== 201) {
+      // If repo exists, github returns 422
+      if (createRepoRes.status === 422 && repoData.errors?.[0]?.message === 'name already exists on this account') {
+        return res.status(400).json({ error: 'A repository with this name already exists on your GitHub.' });
+      }
+      console.error('GitHub Create Repo Error:', repoData);
+      return res.status(500).json({ error: 'Failed to create GitHub repository', details: repoData });
+    }
+
+    // 2. Commit files to the repo
+    // We will do a simple push via the contents API. Since it's multiple files, a tree commit is better, 
+    // but for simplicity we can just create them one by one or create a gist if preferred.
+    // For a real repo, uploading multiple files correctly requires Trees API. 
+    // We'll create files sequentially for simplicity since it's usually just a few files (index.html, styles.css, script.js).
+    
+    const files = project.files as { name: string; content: string }[];
+    for (const file of files) {
+      // Clean path, remove leading slash
+      const cleanPath = file.name.startsWith('/') ? file.name.slice(1) : file.name;
+      await fetch(`https://api.github.com/repos/${repoData.owner.login}/${repoData.name}/contents/${cleanPath}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${profile.githubAccessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: `Add ${cleanPath}`,
+          content: Buffer.from(file.content || '').toString('base64'),
+        }),
+      });
+    }
+
+    res.json({ success: true, url: repoData.html_url });
+  } catch (err) {
+    console.error('Export Error:', err);
+    res.status(500).json({ error: 'Export failed', detail: String(err) });
   }
 });
 
