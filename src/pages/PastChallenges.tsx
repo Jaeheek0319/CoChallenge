@@ -361,7 +361,7 @@ function PastChallengeCard({
           <span>{challenge.difficulty}</span>
         </div>
         <button
-          onClick={() => navigate('/preview-challenge', { state: toPreviewState(challenge) })}
+          onClick={() => navigate(`/challenges/${challenge.id}/submit`)}
           className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors"
         >
           View <Eye className="w-3.5 h-3.5" />
