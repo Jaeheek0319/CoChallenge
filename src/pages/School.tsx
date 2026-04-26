@@ -89,10 +89,10 @@ export function School() {
             <GraduationCap className="w-4 h-4" />
             Curated Community
           </div>
-          <h1 className="text-4xl font-bold mb-2">School</h1>
+          <h1 className="text-4xl font-bold mb-2">Learn Self-Paced, Project-Based</h1>
           <p className="text-slate-400 font-medium">Explore hand-picked project ideas to kickstart your coding journey. Pick one and our AI will build a personalized lesson for it.</p>
         </div>
-        
+
         <div className="flex items-center gap-4 bg-slate-900/50 p-1 rounded-xl border border-slate-800">
           <button className="px-4 py-2 bg-blue-600 rounded-lg text-sm font-bold">Featured</button>
           <button className="px-4 py-2 hover:bg-slate-800 rounded-lg text-sm font-bold text-slate-400 transition-colors">Trending</button>
@@ -149,7 +149,7 @@ export function School() {
                 </span>
               </div>
             </div>
-            
+
             <div className="p-6">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">{project.lang}</span>
@@ -158,10 +158,10 @@ export function School() {
                   {project.likes}
                 </div>
               </div>
-              
+
               <h3 className="text-xl font-bold mb-2 group-hover:text-blue-400 transition-colors">{project.title}</h3>
               <p className="text-sm text-slate-400 mb-6 leading-relaxed">{project.desc}</p>
-              
+
               <div className="flex flex-wrap gap-2 mb-8">
                 {project.tags.map(tag => (
                   <span key={tag} className="px-2 py-0.5 bg-slate-800 rounded text-[10px] font-medium text-slate-500">
@@ -170,7 +170,7 @@ export function School() {
                 ))}
               </div>
 
-              <button 
+              <button
                 onClick={() => navigate('/', { state: { presetPrompt: project.title } })}
                 className="w-full group/btn flex items-center justify-center gap-2 bg-slate-800 hover:bg-blue-600 transition-all py-3 rounded-xl font-bold text-sm"
               >
@@ -181,7 +181,7 @@ export function School() {
           </motion.div>
         ))}
       </div>
-      
+
       <div className="mt-20 text-center p-12 glass-panel rounded-3xl border-dashed">
         <Users className="w-12 h-12 text-slate-800 mx-auto mb-4" />
         <h2 className="text-2xl font-bold mb-2">Want to see more?</h2>
