@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useProjects } from '../hooks/useProjects';
-import { Clock, CheckCircle, Code2, Trash2, ArrowRight, Plus, MoreVertical, Github, Loader2 } from 'lucide-react';
+import { Clock, CheckCircle, Trophy, Trash2, ArrowRight, Plus, MoreVertical, Github, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 
 type FilterType = 'all' | 'completed' | 'in-progress';
@@ -109,7 +109,7 @@ export function Dashboard() {
       ) : filteredProjects.length === 0 ? (
         <div className="text-center py-32 border-2 border-dashed border-slate-800 rounded-3xl">
           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Code2 className="w-10 h-10 text-slate-700" />
+            <Trophy className="w-10 h-10 text-slate-700" />
           </div>
           {activeFilter === 'completed' ? (
             <>
