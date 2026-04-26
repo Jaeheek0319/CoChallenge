@@ -4,6 +4,7 @@ import { Home } from './pages/Home';
 import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
 import { Challenges } from './pages/Challenges';
+import { PastChallenges } from './pages/PastChallenges';
 import { CreateChallenge } from './pages/CreateChallenge';
 import { PreviewChallenge } from './pages/PreviewChallenge';
 import { SubmitChallenge } from './pages/SubmitChallenge';
@@ -204,6 +205,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/generation" element={<Generation />} />
             <Route path="/challenges" element={<Challenges />} />
+            <Route path="/challenges/past" element={<PastChallenges />} />
             <Route path="/create-challenge" element={<CreateChallenge />} />
             <Route path="/preview-challenge" element={<PreviewChallenge />} />
             <Route path="/challenges/:challengeId/submit" element={<SubmitChallenge />} />

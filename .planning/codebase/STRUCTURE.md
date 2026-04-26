@@ -1,9 +1,3 @@
----
-title: Structure
-focus: arch
-last_updated: 2026-04-26
----
-
 # Codebase Structure
 
 **Analysis Date:** 2026-04-26
@@ -11,143 +5,258 @@ last_updated: 2026-04-26
 ## Directory Layout
 
 ```
-gwangju/
-├── .context/                       # Empty scratch notes (notes.md, todos.md)
-├── .planning/
-│   └── codebase/                   # GSD codebase docs
-├── backend/                        # Python Flask AI service
-│   ├── app.py                      # All Gemini-backed endpoints
-│   └── requirements.txt            # flask, flask-cors, google-genai, python-dotenv
-├── public/
-│   └── test_data/
-│       └── project.json            # Sample GeneratedProject for offline dev
-├── server/                         # Node + TypeScript Express API
-│   ├── auth.ts                     # Supabase JWT verification middleware
-│   ├── db.ts                       # MongoClient singleton
-│   └── index.ts                    # /api/health, /api/me, /api/projects[/:id]
-├── src/                            # React + Vite SPA
-│   ├── App.tsx                     # Router + nav + auth modal
-│   ├── components/
-│   │   ├── AuthModal.tsx
-│   │   └── ProjectDial.tsx
-│   ├── contexts/
-│   │   ├── AuthContext.tsx
-│   │   └── ProjectContext.tsx
-│   ├── hooks/
-│   │   └── useProjects.ts
-│   ├── index.css                   # Tailwind base + custom utilities
-│   ├── lib/
-│   │   ├── api.ts                  # Authed fetch wrapper for Express
-│   │   ├── supabase.ts             # Browser Supabase client
-│   │   └── utils.ts                # cn helper
-│   ├── main.tsx                    # createRoot + provider tree
-│   ├── pages/
-│   │   ├── Challenges.tsx
-│   │   ├── Dashboard.tsx
-│   │   ├── Generation.tsx
-│   │   ├── Home.tsx
-│   │   ├── Profile.tsx
-│   │   ├── School.tsx
-│   │   └── Workspace.tsx
-│   ├── services/
-│   │   └── gemini.ts               # Frontend client for Flask AI
-│   └── types.ts                    # Shared TS types
-├── .gitignore                      # node_modules, build, dist, .env*, /.venv
-├── README.md
-├── index.html                      # Vite HTML entry
-├── metadata.json                   # AI Studio app manifest
-├── package.json
-├── package-lock.json
-├── tsconfig.json                   # ES2022, bundler resolution, @/* alias
-└── vite.config.ts                  # React + Tailwind, /api proxy → :3001
+manama/
+├── .context/                 # Local notes and todos
+├── .planning/                # GSD project and codebase mapping documents
+│   └── codebase/             # STACK, ARCHITECTURE, STRUCTURE, etc.
+├── backend/                  # Python Flask/Socket.IO AI and terminal service
+├── public/                   # Static Vite assets
+│   └── test_data/            # Sample generated project JSON files
+├── scripts/                  # Manual MongoDB seed scripts
+├── server/                   # TypeScript Express API
+├── src/                      # React/Vite browser application
+│   ├── components/           # Reusable UI components
+│   ├── contexts/             # React Context providers
+│   ├── hooks/                # Custom React hooks
+│   ├── lib/                  # SDK clients, API clients, utilities
+│   ├── pages/                # Top-level route components
+│   └── services/             # Domain service clients
+├── index.html                # Vite HTML entry
+├── package.json              # npm scripts and dependencies
+├── tsconfig.json             # TypeScript compiler settings
+└── vite.config.ts            # Vite, React, Tailwind, proxy config
 ```
 
 ## Directory Purposes
 
-- **`backend/`** — Flask service wrapping Gemini for generation/help/grading. Key file: `backend/app.py`.
-- **`server/`** — Express API owning the MongoDB `projects` collection and verifying Supabase JWTs. Key files: `server/index.ts`, `server/auth.ts`, `server/db.ts`.
-- **`src/`** — All browser code (Vite app root). Key files: `src/main.tsx`, `src/App.tsx`, `src/types.ts`.
-- **`src/pages/`** — One file per top-level route from `src/App.tsx`. Heavy pages (`Workspace.tsx`, `Generation.tsx`) keep state local.
-- **`src/components/`** — Reusable UI fragments shared across pages (`AuthModal.tsx`, `ProjectDial.tsx`). Not a design-system folder.
-- **`src/contexts/`** — Cross-page state. Each file exports both the `Provider` and a `useXxx` hook.
-- **`src/hooks/`** — Custom hooks. Currently only `useProjects.ts` (thin wrapper).
-- **`src/lib/`** — External SDK clients and pure utilities (`supabase.ts`, `api.ts`, `utils.ts`).
-- **`src/services/`** — Domain-specific HTTP clients; `gemini.ts` maps 1:1 to Flask endpoints.
-- **`public/`** — Static assets served at the site root. Contains `test_data/project.json` used when "Use test data" is checked (`src/pages/Generation.tsx:36-44`). Committed.
-- **`.context/`** — Free-form notes; currently empty. Committed.
-- **`.planning/codebase/`** — Output of GSD codebase mapping. Committed.
+**`.context/`:**
+- Purpose: Free-form workspace context.
+- Contains: Markdown notes and todos.
+- Key files: `.context/notes.md`, `.context/todos.md`.
+- Subdirectories: None observed.
+
+**`.planning/`:**
+- Purpose: GSD planning and mapping artifacts.
+- Contains: Codebase analysis documents under `.planning/codebase/`.
+- Key files: `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STRUCTURE.md`, plus sibling mapper outputs.
+- Subdirectories: `.planning/codebase/`.
+
+**`backend/`:**
+- Purpose: Python service for AI project generation, AI tutor help, step evaluation, and Socket.IO terminal execution.
+- Contains: Flask app and Python dependency list.
+- Key files: `backend/app.py`, `backend/requirements.txt`.
+- Subdirectories: None observed.
+
+**`public/`:**
+- Purpose: Static files served directly by Vite.
+- Contains: Sample generated project JSON used by the generation flow.
+- Key files: `public/test_data/project.json`, `public/test_data/agent_project.json`.
+- Subdirectories: `public/test_data/`.
+
+**`scripts/`:**
+- Purpose: Manual data seeding against the same MongoDB accessed by the Express API.
+- Contains: TypeScript scripts.
+- Key files: `scripts/seed-challenges.ts`, `scripts/seed-submissions.ts`.
+- Subdirectories: None observed.
+
+**`server/`:**
+- Purpose: Node/TypeScript API server for persisted app features.
+- Contains: Express routes, Supabase JWT middleware, and MongoDB connection helper.
+- Key files: `server/index.ts`, `server/auth.ts`, `server/db.ts`.
+- Subdirectories: None observed.
+
+**`src/`:**
+- Purpose: Browser application source.
+- Contains: React app entry, global CSS, route pages, components, contexts, clients, hooks, and shared types.
+- Key files: `src/main.tsx`, `src/App.tsx`, `src/index.css`, `src/types.ts`.
+- Subdirectories: `src/components/`, `src/contexts/`, `src/hooks/`, `src/lib/`, `src/pages/`, `src/services/`.
+
+**`src/components/`:**
+- Purpose: Shared UI widgets used by route pages.
+- Contains: Auth modal, avatar crop modal, challenge/profile widgets, charts, project stats, user search, and terminal component.
+- Key files: `src/components/AuthModal.tsx`, `src/components/XTerm.tsx`, `src/components/ChallengeDojo.tsx`, `src/components/UserSearch.tsx`.
+- Subdirectories: None observed.
+
+**`src/contexts/`:**
+- Purpose: Cross-page React state providers.
+- Contains: Auth and project providers.
+- Key files: `src/contexts/AuthContext.tsx`, `src/contexts/ProjectContext.tsx`.
+- Subdirectories: None observed.
+
+**`src/hooks/`:**
+- Purpose: Custom hooks.
+- Contains: A project hook wrapper.
+- Key files: `src/hooks/useProjects.ts`.
+- Subdirectories: None observed.
+
+**`src/lib/`:**
+- Purpose: Low-level clients and utilities.
+- Contains: Authenticated API wrapper, Supabase client, profile/user/avatar API helpers, and class-name utility.
+- Key files: `src/lib/api.ts`, `src/lib/supabase.ts`, `src/lib/profileApi.ts`, `src/lib/usersApi.ts`, `src/lib/avatarApi.ts`, `src/lib/utils.ts`.
+- Subdirectories: None observed.
+
+**`src/pages/`:**
+- Purpose: Top-level React Router route components.
+- Contains: Home, generation, workspace, challenge, dashboard, profile, and school flows.
+- Key files: `src/pages/Generation.tsx`, `src/pages/Workspace.tsx`, `src/pages/Challenges.tsx`, `src/pages/Profile.tsx`.
+- Subdirectories: None observed.
+
+**`src/services/`:**
+- Purpose: Domain-specific service clients that do not fit the lower-level `src/lib/` wrappers.
+- Contains: Gemini/Flask API client.
+- Key files: `src/services/gemini.ts`.
+- Subdirectories: None observed.
 
 ## Key File Locations
 
 **Entry Points:**
-- `index.html` — HTML shell; loads `/src/main.tsx`.
-- `src/main.tsx` — React root; wraps `<App />` in `StrictMode` + `AuthProvider`.
-- `src/App.tsx` — `BrowserRouter` + `ProjectProvider`; defines all routes; renders nav and `<AuthModal>`.
-- `server/index.ts` — Express app + `app.listen(PORT || 3001)`.
-- `backend/app.py` — Flask app + `app.run(debug=True, port=5000)`.
+- `index.html`: Vite HTML shell.
+- `src/main.tsx`: React `createRoot` bootstrap and `AuthProvider` installation.
+- `src/App.tsx`: App shell, route table, navigation, auth modal, and `ProjectProvider`.
+- `server/index.ts`: Express API process entry point.
+- `backend/app.py`: Flask and Socket.IO process entry point.
+- `start.sh`: Local helper that starts Vite, Express, and Flask commands sequentially.
 
 **Configuration:**
-- `package.json` — Scripts (`dev`, `dev:server`, `dev:agent`, `build`, `preview`, `clean`, `lint`) and deps.
-- `tsconfig.json` — TS compiler options; `@/*` path alias resolves to repo root.
-- `vite.config.ts` — React + Tailwind plugins; `/api → http://localhost:3001` proxy; `process.env.GEMINI_API_KEY` define; `@` alias.
-- `metadata.json` — AI Studio app descriptor.
-- `.env.local` (gitignored via `.env*`) — expected to hold `GEMINI_API_KEY`, `MONGODB_URI`, `SUPABASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+- `package.json`: npm scripts, runtime dependencies, and dev dependencies.
+- `package-lock.json`: Locked npm dependency graph.
+- `tsconfig.json`: TypeScript target, JSX mode, bundler module resolution, and `@/*` path alias.
+- `vite.config.ts`: React/Tailwind plugins, `@` alias, `/api` proxy, and HMR setting.
+- `backend/requirements.txt`: Python dependencies for the Flask service.
+- `.gitignore`: Excludes dependencies, build output, Python virtualenv, and `.env*` files.
+- `metadata.json`: AI Studio app metadata.
 
 **Core Logic:**
-- `src/types.ts` — Source of truth for project/lesson types.
-- `src/contexts/ProjectContext.tsx` — Project save/load orchestration (local + remote).
-- `src/contexts/AuthContext.tsx` — Auth session lifecycle.
-- `src/services/gemini.ts` — All AI calls.
-- `src/lib/api.ts` — All authed Express calls.
-- `server/index.ts` — Project CRUD endpoints.
-- `server/auth.ts` — JWT verification.
-- `backend/app.py` — Gemini prompt templates + three POST handlers.
+- `src/types.ts`: Shared browser data types for generated projects, profiles, users, and challenges.
+- `src/contexts/AuthContext.tsx`: Supabase auth state provider.
+- `src/contexts/ProjectContext.tsx`: Project load/save state provider with localStorage and Express persistence.
+- `src/lib/api.ts`: Authenticated JSON fetch wrapper for Express.
+- `src/lib/supabase.ts`: Browser Supabase client.
+- `src/services/gemini.ts`: Browser client for Flask AI endpoints.
+- `server/auth.ts`: Supabase JWT verification middleware.
+- `server/db.ts`: MongoDB connection singleton.
+- `server/index.ts`: Profiles, projects, challenges, submissions, GitHub export, signed upload/download URLs, grading, and Elo APIs.
+- `backend/app.py`: Google ADK/Gemini lesson pipeline, AI help, step completion evaluation, and C/C++ terminal execution.
 
-**Testing:** None. No `*.test.*`, no Jest/Vitest config, no `tests/` directory.
+**Testing and Manual Fixtures:**
+- `public/test_data/project.json`: Manual fixture loaded by `src/pages/Generation.tsx`.
+- `public/test_data/agent_project.json`: Additional generated project fixture.
+- `test_runner.py`: Manual Google ADK runner inspection script.
+- `check_adk.py`, `check_adk_methods.py`: Manual ADK diagnostics.
+- No `tests/` directory or `*.test.*` files were observed.
+
+**Documentation:**
+- `README.md`: AI Studio/local run instructions.
+- `README-SETUP.md`: Present but currently empty.
+- `.planning/codebase/*.md`: GSD codebase mapping documents.
+
+**Generated or Extracted Artifacts:**
+- `app_adk.py`: Extracted/generated Python content stored as a quoted string-like artifact.
+- `extracted_app.py`: Extracted Python artifact with nonstandard encoding bytes.
+- `extract.py`: One-off extractor referencing a Windows log path.
 
 ## Naming Conventions
 
 **Files:**
-- React components/pages: `PascalCase.tsx` (`Home.tsx`, `AuthModal.tsx`, `Workspace.tsx`).
-- Non-component TS modules: `camelCase.ts` (`api.ts`, `supabase.ts`, `utils.ts`, `useProjects.ts`, `gemini.ts`, `types.ts`).
-- Context files: `<Name>Context.tsx` (`AuthContext.tsx`, `ProjectContext.tsx`).
-- Server TS files: `lowercase.ts` (`index.ts`, `auth.ts`, `db.ts`).
-- Python: `snake_case.py` (`app.py`).
+- `PascalCase.tsx` for React components and pages, such as `src/pages/CreateChallenge.tsx` and `src/components/AuthModal.tsx`.
+- `camelCase.ts` for browser utility/service modules, such as `src/lib/profileApi.ts` and `src/services/gemini.ts`.
+- `<Name>Context.tsx` for context providers, such as `src/contexts/AuthContext.tsx`.
+- `use<Name>.ts` for hooks, such as `src/hooks/useProjects.ts`.
+- Lowercase TypeScript files in `server/`, such as `server/index.ts`, `server/auth.ts`, and `server/db.ts`.
+- `snake_case.py` for Python scripts when applicable, such as `test_runner.py`.
 
-**Directories:** All-lowercase, no separators (`pages`, `components`, `contexts`, `hooks`, `lib`, `services`, `server`, `backend`, `public`).
+**Directories:**
+- Lowercase collection directories: `src/pages`, `src/components`, `src/contexts`, `src/hooks`, `src/lib`, `src/services`, `server`, `backend`, `scripts`, `public`.
+- No feature-folder nesting is currently used inside `src/pages` or `src/components`; both are flat.
 
-**Symbols:**
-- Components/types: `PascalCase` (`AuthProvider`, `LessonStep`, `UserProject`).
-- Functions/variables: `camelCase` (`saveProject`, `handleGenerate`, `getKey`).
-- Constants/route-data arrays: `SCREAMING_SNAKE_CASE` (`FEATURED_CHALLENGES`, `COMMUNITY_CHALLENGES`, `PRESET_PROJECTS`, `MODEL_ID`, `BACKEND_URL`).
-- Hooks: `useXxx` (`useAuth`, `useProjects`, `useProjectContext`).
-
-**Routes** (`src/App.tsx:151-158`): `/`, `/workspace/:projectId`, `/dashboard`, `/generation`, `/challenges`, `/school`, `/profile`.
-
-**API paths:** All under `/api/...`, camelCase action names: `/api/health`, `/api/me`, `/api/projects`, `/api/projects/:id`, `/api/generateProject`, `/api/getAIHelp`, `/api/checkStepCompletion`.
+**Special Patterns:**
+- API routes use `/api/...` paths.
+- Public profile routes use `/u/:username` in `src/App.tsx`.
+- Public static assets are referenced from `public/` with root-relative paths such as `/test_data/project.json`.
+- Shared TypeScript interfaces are centralized in `src/types.ts`, while Express has separate local document interfaces in `server/index.ts`.
 
 ## Where to Add New Code
 
-- **New page (route):** `src/pages/<Name>.tsx` as a named export. Wire by importing in `src/App.tsx` and adding `<Route path="..." element={<Name />} />` inside `<Routes>` (`src/App.tsx:150-158`); add a `<Link>` in the nav block (`src/App.tsx:52-69`) if user-visible.
-- **New shared UI component:** `src/components/<Name>.tsx` as a named export. Use `cn(...)` from `src/lib/utils.ts` for conditional classes.
-- **New cross-page state:** `src/contexts/<Name>Context.tsx` exporting `<Name>Provider` and `use<Name>Context`. Wrap in the provider tree (note: providers needing `useNavigate` must be inside `<BrowserRouter>` like `ProjectProvider` is in `src/App.tsx:37`).
-- **New hook:** `src/hooks/use<Name>.ts`. If it just re-exports a context hook, follow `useProjects.ts`.
-- **New Express endpoint:** Add to `server/index.ts`. Use `requireAuth` from `server/auth.ts` for user-scoped routes; use `getDb()` from `server/db.ts`. `express.json` is mounted at `server/index.ts:7`.
-- **New Flask endpoint:** Add `@app.route('/api/...', methods=['POST'])` in `backend/app.py`. Reuse the `client.models.generate_content(model=MODEL_ID, ...)` pattern and the inline JSON-fence stripper (`backend/app.py:75-84`, `:168-177`).
-- **New AI call from SPA:** Add a function to `src/services/gemini.ts` that POSTs to `${BACKEND_URL}/<endpoint>` and returns a typed result. Don't put `fetch` calls in components.
-- **New authed Express call from SPA:** Use `api.get/put/delete` from `src/lib/api.ts`. Manual `fetch` won't include the bearer token.
-- **New persisted field on a project:** (1) update types in `src/types.ts`; (2) update `ProjectDoc` in `server/index.ts:9-21` and the upsert body at `server/index.ts:55-67`; (3) update Flask response shape in `backend/app.py:34-54` if it originates at generation.
-- **New utility:** Pure helpers → `src/lib/<name>.ts`. Domain-specific HTTP → `src/services/<name>.ts`.
-- **New static asset:** Drop into `public/`; reference with a root-relative path (`/test_data/project.json`).
-- **Tests:** No framework configured. If introducing one, place tests next to source as `*.test.ts(x)` and add the runner to `package.json` scripts.
+**New Page or Route:**
+- Primary code: `src/pages/<Name>.tsx`.
+- Route wiring: import the page and add a `<Route>` in `src/App.tsx`.
+- Navigation: add a `Link` in `src/App.tsx` when the route should appear in the top nav or profile menu.
+
+**New Shared Component:**
+- Implementation: `src/components/<Name>.tsx`.
+- Types: colocate component-local props in the component file unless shared externally.
+- Styling: use Tailwind classes and `cn()` from `src/lib/utils.ts` when conditional class merging is needed.
+
+**New Cross-Page State:**
+- Implementation: `src/contexts/<Name>Context.tsx`.
+- Hook: export a `use<Name>` or `use<Name>Context` hook from the same file.
+- Provider placement: add the provider near `AuthProvider` in `src/main.tsx` or inside `BrowserRouter` in `src/App.tsx` depending on whether it needs router APIs.
+
+**New Browser API Client:**
+- Authenticated Express calls: add methods around `api` in `src/lib/<domain>Api.ts`.
+- Public Express calls: follow the `getJson()` pattern in `src/lib/usersApi.ts` if no bearer token is needed.
+- Flask AI calls: add typed functions in `src/services/gemini.ts`.
+- Supabase Storage calls: place bucket-specific helpers in `src/lib/<domain>Api.ts`.
+
+**New Express Endpoint:**
+- Definition: `server/index.ts`.
+- Auth: use `requireAuth` from `server/auth.ts` for user-scoped endpoints.
+- Database: use `getDb()` from `server/db.ts`.
+- Shared browser types: update `src/types.ts` if the response is consumed by the React app.
+
+**New Mongo Collection or Document Shape:**
+- Server shape: add or update a local interface in `server/index.ts`.
+- Seed data: add scripts under `scripts/` if demo data is needed.
+- Browser shape: add exported interfaces to `src/types.ts` when consumed by the SPA.
+
+**New Flask AI or Terminal Capability:**
+- HTTP route: add `@app.route('/api/...', methods=['POST'])` to `backend/app.py`.
+- Socket event: add a `@socketio.on(...)` handler in `backend/app.py`.
+- Browser caller: add a function in `src/services/gemini.ts` or extend `src/components/XTerm.tsx`.
+- Dependencies: update `backend/requirements.txt`.
+
+**New Static Fixture or Asset:**
+- Static path: `public/<name>` or `public/test_data/<name>.json`.
+- Reference: root-relative path from browser code.
+
+**New Tests:**
+- Current repo has no configured test runner.
+- For TypeScript tests, add the test runner dependency and script in `package.json`; colocated `*.test.ts` or `*.test.tsx` files would match the existing flat source structure.
+- For backend Python tests, add test dependencies to `backend/requirements.txt` and keep tests outside runtime service files.
 
 ## Special Directories
 
-- **`public/`** — Static assets served verbatim by Vite. Generated: No. Committed: Yes.
-- **`dist/`** — Vite build output. Generated: Yes (`npm run build`). Committed: No.
-- **`node_modules/`** — npm deps. Generated: Yes. Committed: No.
-- **`.venv/`** — Optional Python virtualenv for `backend/`. Generated: Yes. Committed: No.
-- **`.context/`** — Free-form notes. Committed (currently empty).
-- **`.planning/`** — GSD planning + codebase docs. Generated by GSD commands. Committed.
+**`public/`:**
+- Purpose: Vite-served static files.
+- Source: Manually maintained fixtures/assets.
+- Committed: Yes.
+
+**`dist/`:**
+- Purpose: Vite production build output.
+- Source: Generated by `npm run build`.
+- Committed: No, excluded by `.gitignore`.
+
+**`node_modules/`:**
+- Purpose: npm dependency installation.
+- Source: Generated by `npm install`.
+- Committed: No, excluded by `.gitignore`.
+
+**`.venv/`:**
+- Purpose: Optional Python virtual environment for `backend/`.
+- Source: Generated locally.
+- Committed: No, excluded by `.gitignore`.
+
+**`.planning/`:**
+- Purpose: GSD state and codebase mapping docs.
+- Source: Generated/maintained by GSD workflow commands.
+- Committed: Yes in this workspace.
+
+**`.context/`:**
+- Purpose: Scratch notes and todos.
+- Source: Manually maintained.
+- Committed: Yes in this workspace.
+
+---
 
 *Structure analysis: 2026-04-26*
+*Update when directory structure changes*

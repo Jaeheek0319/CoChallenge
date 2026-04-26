@@ -517,7 +517,7 @@ builtins.input = async_input
             theme="vs-dark"
             onChange={handleFileChange}
             onMount={(editor, monaco) => {
-              editor.onDidType((text) => {
+              (editor as any).onDidType((text: string) => {
                 if (text === '>') {
                   const position = editor.getPosition();
                   if (!position) return;

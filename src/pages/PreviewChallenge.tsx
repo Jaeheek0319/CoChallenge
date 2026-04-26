@@ -4,9 +4,11 @@ import Editor from '@monaco-editor/react';
 import { motion } from 'motion/react';
 import { ArrowLeft, Play, Copy, CheckCircle2 } from 'lucide-react';
 
+type ChallengeState = 'open' | 'closed' | 'graded';
+
 interface ChallengePreviewData {
   challengeId?: string;
-  state?: 'open' | 'closed' | 'graded';
+  state?: ChallengeState;
   dueDate?: string;
   title: string;
   description: string;
@@ -19,6 +21,13 @@ interface ChallengePreviewData {
   estimatedTime: string;
   isCompanyChallenge: boolean;
   companyName?: string;
+}
+
+function getPreviewState(challenge: ChallengePreviewData): ChallengeState {
+  if (challenge.state === 'graded') return 'graded';
+  const due = challenge.dueDate ? Date.parse(challenge.dueDate) : NaN;
+  if (Number.isFinite(due) && Date.now() >= due) return 'closed';
+  return challenge.state ?? 'open';
 }
 
 export function PreviewChallenge() {
@@ -49,6 +58,8 @@ export function PreviewChallenge() {
       </div>
     );
   }
+
+  const challengeState = getPreviewState(challengeData);
 
   const handleRun = () => {
     if (!challengeData.starterCode && !code) {
@@ -136,17 +147,17 @@ export function PreviewChallenge() {
           <span className="px-3 py-1 bg-slate-800 text-slate-300 rounded-full text-xs font-bold">
             {challengeData.estimatedTime}
           </span>
-          {challengeData.state === 'closed' && (
+          {challengeState === 'closed' && (
             <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-full text-xs font-bold">
               Closed
             </span>
           )}
-          {challengeData.state === 'graded' && (
+          {challengeState === 'graded' && (
             <span className="px-3 py-1 bg-violet-500/10 border border-violet-500/20 text-violet-300 rounded-full text-xs font-bold">
               Graded
             </span>
           )}
-          {challengeData.challengeId && challengeData.state === 'open' && (
+          {challengeData.challengeId && challengeState === 'open' && (
             <button
               onClick={() => navigate(`/challenges/${challengeData.challengeId}/submit`)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-blue-900/30 active:scale-95"
@@ -253,7 +264,7 @@ export function PreviewChallenge() {
                 onChange={(value) => setCode(value || '')}
                 theme="vs-dark"
                 onMount={(editor, monaco) => {
-                  editor.onDidType((text) => {
+                  (editor as any).onDidType((text: string) => {
                     if (text === '>') {
                       const position = editor.getPosition();
                       if (!position) return;
