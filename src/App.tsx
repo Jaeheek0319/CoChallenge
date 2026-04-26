@@ -45,10 +45,10 @@ export default function App() {
                       <Code2 className="w-5 h-5 text-white" />
                     </div>
                     <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                      ProjectCode
+                      CoChallenge
                     </span>
                   </Link>
-                  
+
                   <div className="hidden md:flex items-center gap-6">
                     <Link to="/generation" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4" />
@@ -105,7 +105,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      <button 
+                      <button
                         onClick={signOut}
                         className="p-2 text-slate-400 hover:text-red-400 transition-colors"
                         title="Sign Out"
@@ -115,7 +115,7 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <button 
+                      <button
                         onClick={() => {
                           setAuthMode('login');
                           setIsAuthModalOpen(true);
@@ -124,7 +124,7 @@ export default function App() {
                       >
                         Sign In
                       </button>
-                      <button 
+                      <button
                         onClick={() => {
                           setAuthMode('signup');
                           setIsAuthModalOpen(true);
@@ -140,8 +140,8 @@ export default function App() {
             </div>
           </nav>
 
-          <AuthModal 
-            isOpen={isAuthModalOpen} 
+          <AuthModal
+            isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
             initialMode={authMode}
           />
