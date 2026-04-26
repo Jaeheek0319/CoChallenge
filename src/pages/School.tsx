@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Globe, Heart, Users, Star, ArrowRight, Code } from 'lucide-react';
+import { Globe, Heart, Users, Star, ArrowRight, Code, Search, ChevronDown } from 'lucide-react';
 
 const PRESET_PROJECTS = [
   {
@@ -62,6 +62,24 @@ const PRESET_PROJECTS = [
 
 export function School() {
   const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilter, setSearchFilter] = useState('All');
+
+  const filteredProjects = PRESET_PROJECTS.filter(p => {
+    const query = searchQuery.toLowerCase();
+    if (!query) return true;
+
+    const matchesTitle = p.title.toLowerCase().includes(query);
+    const matchesTag = p.tags.some(t => t.toLowerCase().includes(query));
+    const matchesLang = p.lang.toLowerCase().includes(query);
+
+    switch (searchFilter) {
+      case 'Title': return matchesTitle;
+      case 'Tag': return matchesTag;
+      case 'Language': return matchesLang;
+      default: return matchesTitle || matchesTag || matchesLang;
+    }
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -82,8 +100,39 @@ export function School() {
         </div>
       </div>
 
+      {/* Search Bar & Filters */}
+      <div className="mb-12 flex flex-col sm:flex-row gap-4">
+        <div className="w-full relative group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all text-lg"
+          />
+        </div>
+        <div className="sm:w-48 relative shrink-0">
+          <select
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white appearance-none cursor-pointer text-lg"
+          >
+            <option value="All">All Categories</option>
+            <option value="Title">Title</option>
+            <option value="Language">Language</option>
+            <option value="Tag">Tag</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+            <ChevronDown className="w-5 h-5 text-slate-500" />
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {PRESET_PROJECTS.map((project, idx) => (
+        {filteredProjects.map((project, idx) => (
           <motion.div
             key={project.id}
             initial={{ opacity: 0, scale: 0.95 }}
