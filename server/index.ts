@@ -37,16 +37,31 @@ interface ChallengeDoc {
   estimatedTime: string;
   company: { name: string; role: string } | null;
   verified: boolean;
+  logoUrl: string | null;
   likes: number;
   createdAt: string;
 }
 
-const VERIFIED_COMPANY_DOMAINS: Record<string, string> = {
-  'stripe.com': 'Stripe',
-  'vercel.com': 'Vercel',
-  'airbnb.com': 'Airbnb',
-  'linear.app': 'Linear',
+interface VerifiedCompany {
+  name: string;
+  logoFile: string;
+}
+
+const VERIFIED_COMPANY_DOMAINS: Record<string, VerifiedCompany> = {
+  'stripe.com': { name: 'Stripe', logoFile: 'stripe.svg' },
+  'vercel.com': { name: 'Vercel', logoFile: 'vercel.svg' },
+  'airbnb.com': { name: 'Airbnb', logoFile: 'airbnb.svg' },
+  'linear.app': { name: 'Linear', logoFile: 'linear.svg' },
+  'autodb.app': { name: 'AutoDB', logoFile: 'autodb.svg' },
 };
+
+const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
+const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET ?? 'logos';
+
+function publicLogoUrl(file: string): string | null {
+  if (!SUPABASE_URL) return null;
+  return `${SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${file}`;
+}
 
 const ALLOWED_DIFFICULTIES = new Set(['Beginner', 'Intermediate', 'Advanced']);
 
@@ -212,7 +227,7 @@ app.get('/api/challenges', async (_req, res) => {
     const docs = await db
       .collection<ChallengeDoc>('challenges')
       .find({})
-      .sort({ createdAt: -1 })
+      .sort({ likes: -1, createdAt: -1 })
       .toArray();
     const challenges = docs.map(({ _id, ...rest }) => ({ id: _id, ...rest }));
     res.json(challenges);
@@ -268,8 +283,10 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
     const verifiedCompany = VERIFIED_COMPANY_DOMAINS[domain] ?? null;
 
     let company: ChallengeDoc['company'] = null;
+    let logoUrl: string | null = null;
     if (verifiedCompany) {
-      company = { name: verifiedCompany, role: submittedCompanyRole || 'Engineer' };
+      company = { name: verifiedCompany.name, role: submittedCompanyRole || 'Engineer' };
+      logoUrl = publicLogoUrl(verifiedCompany.logoFile);
     } else if (submittedCompanyName) {
       company = { name: submittedCompanyName, role: submittedCompanyRole };
     }
@@ -292,6 +309,7 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
       estimatedTime,
       company,
       verified: Boolean(verifiedCompany),
+      logoUrl,
       likes: 0,
       createdAt: new Date().toISOString(),
     };
