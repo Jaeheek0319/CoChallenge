@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useProjects } from '../hooks/useProjects';
 import { UserProject, ProjectFile } from '../types';
+import { getAIHelp, checkStepCompletion } from '../services/gemini';
 import { cn } from '../lib/utils';
 import { io, Socket } from 'socket.io-client';
 import { XTerm } from '../components/XTerm';

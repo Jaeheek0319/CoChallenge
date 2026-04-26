@@ -40,6 +40,7 @@ export interface UserProfile {
   linkedinUrl: string;
   githubUrl: string;
   twitterUrl: string;
+  githubAccessToken?: string;
   updatedAt: string;
 }
 

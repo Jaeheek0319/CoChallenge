@@ -202,7 +202,7 @@ renderPreview();`}</code></pre>
                   <div className="flex items-center justify-between text-sm p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center justify-center h-6 w-6 rounded-full bg-amber-500/20 text-amber-400 font-mono text-xs font-bold border border-amber-500/30">1</span>
-                      <span className="text-slate-200 font-medium">AlexDeveloper</span>
+                      <span className="text-slate-200 font-medium">rihiv99506</span>
                     </div>
                     <span className="text-purple-400 font-mono font-semibold">2,450 ELO</span>
                   </div>
