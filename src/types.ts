@@ -33,6 +33,7 @@ export interface UserProject extends GeneratedProject {
 }
 
 export interface UserProfile {
+  username: string;
   fullName: string;
   bio: string;
   avatarUrl: string;
@@ -40,4 +41,39 @@ export interface UserProfile {
   githubUrl: string;
   twitterUrl: string;
   updatedAt: string;
+}
+
+export interface PublicUser {
+  username: string;
+  fullName: string;
+  avatarUrl: string;
+}
+
+export interface PublicProjectSummary {
+  id: string;
+  title: string;
+  description: string;
+  language: string;
+  difficulty: string;
+  learningGoals: string[];
+  currentStep: number;
+  totalSteps: number;
+  updatedAt: string;
+}
+
+export interface PublicChallengeSummary {
+  id: string;
+  authorId: string;
+  authorUsername: string;
+  title: string;
+  description: string;
+  language: string;
+  difficulty: string;
+  tags: string[];
+  estimatedTime: string;
+  company: { name: string; role: string } | null;
+  verified: boolean;
+  logoUrl: string | null;
+  likes: number;
+  createdAt: string;
 }

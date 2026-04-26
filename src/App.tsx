@@ -9,9 +9,11 @@ import { PreviewChallenge } from './pages/PreviewChallenge';
 import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
+import { PublicProfile } from './pages/PublicProfile';
 import { Code2, Layout, Globe, LogOut, Sparkles, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
+import { UserSearch } from './components/UserSearch';
 import { ProjectProvider } from './contexts/ProjectContext';
 
 export default function App() {
@@ -68,6 +70,9 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                  <div className="hidden md:block">
+                    <UserSearch />
+                  </div>
                   {user ? (
                     <>
                       <div className="relative" ref={dropdownRef}>
@@ -155,6 +160,7 @@ export default function App() {
               <Route path="/preview-challenge" element={<PreviewChallenge />} />
               <Route path="/school" element={<School />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/u/:username" element={<PublicProfile />} />
             </Routes>
           </main>
         </div>

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useProjects } from '../hooks/useProjects';
 import { ProjectDial } from '../components/ProjectDial';
+import { useProjects } from '../hooks/useProjects';
 import {
   User as UserIcon,
   Github,
@@ -9,16 +9,22 @@ import {
   Twitter,
   Pencil,
   Camera,
+  AtSign,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
 import { profileApi } from '../lib/profileApi';
 import { uploadAvatar, deleteAvatar } from '../lib/avatarApi';
 import { AvatarCropModal } from '../components/AvatarCropModal';
+import { UserProjectsList } from '../components/UserProjectsList';
+import { UserChallengesList } from '../components/UserChallengesList';
 import type { UserProfile } from '../types';
 
 const emailPrefix = (email: string | null | undefined) =>
   email ? email.split('@')[0] : 'Guest';
 
 const emptyDraft: UserProfile = {
+  username: '',
   fullName: '',
   bio: '',
   avatarUrl: '',
@@ -29,12 +35,36 @@ const emptyDraft: UserProfile = {
 };
 
 const LIMITS = {
+  username: 30,
   fullName: 100,
   bio: 280,
   url: 300,
 };
 
+const RESERVED = new Set([
+  'admin', 'settings', 'api', 'login', 'signup', 'logout',
+  'null', 'undefined', 'me', 'search', 'user', 'users',
+  'profile', 'profiles', 'auth', 'health', 'home',
+]);
+
 const validateUrl = (u: string) => u.trim() === '' || /^https?:\/\//i.test(u.trim());
+
+function localUsernameError(u: string): string | null {
+  const trimmed = u.trim().toLowerCase();
+  if (trimmed.length === 0) return 'Username is required';
+  if (trimmed.length < 3 || trimmed.length > 30) return 'Must be 3-30 characters';
+  if (!/^[a-z0-9_-]+$/.test(trimmed)) return 'Only letters, numbers, _ and -';
+  if (RESERVED.has(trimmed)) return 'That username is reserved';
+  return null;
+}
+
+type UsernameStatus =
+  | { kind: 'idle' }
+  | { kind: 'invalid'; message: string }
+  | { kind: 'checking' }
+  | { kind: 'available' }
+  | { kind: 'taken' }
+  | { kind: 'unchanged' };
 
 export function Profile() {
   const { user } = useAuth();
@@ -110,7 +140,53 @@ export function Profile() {
   const linkedinErr = urlError(draft.linkedinUrl);
   const githubErr = urlError(draft.githubUrl);
   const twitterErr = urlError(draft.twitterUrl);
-  const hasErr = !!(linkedinErr || githubErr || twitterErr);
+
+  const usernameLocalErr = useMemo(
+    () => (editing ? localUsernameError(draft.username) : null),
+    [editing, draft.username]
+  );
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>({ kind: 'idle' });
+
+  useEffect(() => {
+    if (!editing) {
+      setUsernameStatus({ kind: 'idle' });
+      return;
+    }
+    if (usernameLocalErr) {
+      setUsernameStatus({ kind: 'invalid', message: usernameLocalErr });
+      return;
+    }
+    const candidate = draft.username.trim().toLowerCase();
+    if (profile && candidate === profile.username) {
+      setUsernameStatus({ kind: 'unchanged' });
+      return;
+    }
+    setUsernameStatus({ kind: 'checking' });
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      profileApi
+        .checkUsername(candidate)
+        .then((r) => {
+          if (cancelled) return;
+          if (r.available) setUsernameStatus({ kind: 'available' });
+          else setUsernameStatus({ kind: 'taken' });
+        })
+        .catch(() => {
+          if (!cancelled) setUsernameStatus({ kind: 'idle' });
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [editing, draft.username, usernameLocalErr, profile]);
+
+  const usernameBlocksSave =
+    usernameStatus.kind === 'invalid' ||
+    usernameStatus.kind === 'taken' ||
+    usernameStatus.kind === 'checking';
+
+  const hasErr = !!(linkedinErr || githubErr || twitterErr) || usernameBlocksSave;
 
   const save = async () => {
     if (hasErr) return;
@@ -131,7 +207,8 @@ export function Profile() {
     }
   };
 
-  const displayName = profile?.fullName?.trim() || emailPrefix(user?.email);
+  const displayName =
+    profile?.fullName?.trim() || profile?.username || emailPrefix(user?.email);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
@@ -162,7 +239,10 @@ export function Profile() {
               </button>
             )}
           </div>
-          <p className="text-sm text-slate-400 mt-3">{displayName}</p>
+          <p className="text-sm text-white mt-3 font-medium">{displayName}</p>
+          {profile?.username && (
+            <p className="text-xs text-slate-400">@{profile.username}</p>
+          )}
         </div>
 
         {/* Dial Section */}
@@ -193,6 +273,7 @@ export function Profile() {
 
         {!loading && !editing && (
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Username" value={profile?.username ? `@${profile.username}` : ''} placeholder="Not set" />
             <Field label="Full name" value={profile?.fullName} placeholder="Not set" />
             <Field label="Email" value={user?.email ?? 'No email available'} />
             <div className="sm:col-span-2">
@@ -206,6 +287,11 @@ export function Profile() {
 
         {!loading && editing && (
           <div className="grid gap-4 sm:grid-cols-2">
+            <UsernameField
+              value={draft.username}
+              onChange={(v) => updateDraft({ username: v })}
+              status={usernameStatus}
+            />
             <InputField
               label="Full name"
               value={draft.fullName}
@@ -275,11 +361,92 @@ export function Profile() {
         )}
       </div>
 
+      {profile?.username && !editing && (
+        <>
+          <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl shadow-black/20 mt-6">
+            <h2 className="text-2xl font-semibold text-white mb-6">Challenges authored</h2>
+            <UserChallengesList username={profile.username} />
+          </div>
+
+          <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl shadow-black/20 mt-6">
+            <h2 className="text-2xl font-semibold text-white mb-6">Projects</h2>
+            <UserProjectsList username={profile.username} />
+          </div>
+        </>
+      )}
+
       <AvatarCropModal
         open={cropOpen}
         onClose={() => setCropOpen(false)}
         onSave={onAvatarPicked}
       />
+    </div>
+  );
+}
+
+function UsernameField({
+  value,
+  onChange,
+  status,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  status: UsernameStatus;
+}) {
+  const message = (() => {
+    switch (status.kind) {
+      case 'invalid':
+        return { text: status.message, tone: 'red' as const, icon: <AlertCircle className="w-3.5 h-3.5" /> };
+      case 'taken':
+        return { text: 'Username is taken', tone: 'red' as const, icon: <AlertCircle className="w-3.5 h-3.5" /> };
+      case 'checking':
+        return { text: 'Checking availability…', tone: 'slate' as const, icon: null };
+      case 'available':
+        return { text: 'Available', tone: 'green' as const, icon: <Check className="w-3.5 h-3.5" /> };
+      case 'unchanged':
+        return { text: 'Current username', tone: 'slate' as const, icon: null };
+      default:
+        return null;
+    }
+  })();
+  const toneClass =
+    message?.tone === 'red'
+      ? 'text-red-400'
+      : message?.tone === 'green'
+      ? 'text-green-400'
+      : 'text-slate-500';
+
+  return (
+    <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-6">
+      <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+        <AtSign className="w-4 h-4" />
+        Username
+      </h3>
+      <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg overflow-hidden focus-within:border-sky-500">
+        <span className="pl-3 pr-1 text-slate-500 text-base">@</span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+          maxLength={LIMITS.username}
+          placeholder="your-handle"
+          autoComplete="off"
+          className="flex-1 bg-transparent px-2 py-2 text-white text-base placeholder-slate-600 focus:outline-none"
+        />
+      </div>
+      <div className="mt-2 flex items-center justify-between text-xs">
+        {message ? (
+          <span className={`flex items-center gap-1 ${toneClass}`}>
+            {message.icon}
+            {message.text}
+          </span>
+        ) : (
+          <span className="text-slate-600">&nbsp;</span>
+        )}
+        <span className="text-slate-600">
+          {value.length} / {LIMITS.username}
+        </span>
+      </div>
     </div>
   );
 }
