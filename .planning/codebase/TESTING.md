@@ -1,81 +1,152 @@
----
-title: Testing
-focus: quality
-last_updated: 2026-04-26
----
+# Testing Patterns
 
-# Testing
+**Analysis Date:** 2026-04-26
 
 ## Test Framework
 
-**None.** The repository contains zero automated tests.
+**Runner:**
+- No JavaScript/TypeScript unit test runner is configured. `package.json` has no `test` script and no Jest, Vitest, React Testing Library, or Playwright dependencies.
+- No test config files were found for Jest, Vitest, or Playwright.
+- Python has no pytest or unittest configuration. `backend/requirements.txt` contains Flask, Google ADK/GenAI, Socket.IO, and runtime dependencies, but no dedicated test dependency.
+- Current quality gate is TypeScript type checking via `npm run lint`, which maps to `tsc --noEmit` in `package.json`.
 
-- No `jest.config.*`, `vitest.config.*`, `playwright.config.*`, `cypress.config.*`, `pytest.ini`, or `tox.ini` is committed.
-- `package.json` has no `test` script. Its `"lint": "tsc --noEmit"` (line 13) is a TypeScript type check, not a test runner.
-- `backend/requirements.txt` lists only `flask`, `flask-cors`, `google-genai`, `python-dotenv` — no Python test dependencies.
+**Assertion Library:**
+- No assertion library is established for JS/TS or Python tests.
+- Existing root scripts such as `test_runner.py`, `check_adk.py`, and `check_adk_methods.py` print diagnostic output rather than asserting behavior.
 
-## Run Commands
-
-No test command exists. Available scripts (from `package.json`):
-
-- `npm run dev` — Vite dev server on port 3000
-- `npm run dev:server` — Express API on port 3001 via `tsx watch server/index.ts`
-- `npm run dev:agent` — Flask backend on port 5000 (`py backend/app.py`)
-- `npm run build` / `npm run preview` / `npm run clean`
-- `npm run lint` — `tsc --noEmit` (type check only)
+**Run Commands:**
+```bash
+npm install        # Install JS/TS dependencies before type checks
+npm run lint       # Type-check with tsc --noEmit
+npm run build      # Vite production build smoke check
+python test_runner.py          # Manual ADK diagnostic script, not an automated test suite
+python check_adk.py            # Manual ADK import/introspection diagnostic
+python check_adk_methods.py    # Manual ADK method/introspection diagnostic
+```
+- In this checkout on 2026-04-26, `npm run lint` failed with `sh: tsc: command not found`, indicating dependencies were not installed or linked in the workspace.
 
 ## Test File Organization
 
-A search for `*.test.*`, `*.spec.*`, `test_*.py`, `__tests__/`, `tests/`, and `test/` under `src/`, `server/`, `backend/`, and the repo root returns **zero matches**.
+**Location:**
+- No `*.test.*`, `*.spec.*`, `tests/`, or `__tests__/` files are present.
+- Manual diagnostic scripts live at the repository root: `test_runner.py`, `check_adk.py`, and `check_adk_methods.py`.
+- JSON sample data lives under `public/test_data/`, specifically `public/test_data/project.json` and `public/test_data/agent_project.json`; these are fixtures/sample data for the app, not automated tests.
+- Seed scripts live under `scripts/`, such as `scripts/seed-challenges.ts` and `scripts/seed-submissions.ts`; these populate development data and are not tests.
 
-The only "test"-named directory is `public/test_data/` containing `project.json`, which is a **runtime** fixture loaded by `src/pages/Generation.tsx:36-44` when the user toggles "Use test data" — not a test asset.
+**Naming:**
+- No automated test naming convention has been established.
+- Existing diagnostic script names are descriptive but not framework-discoverable test names.
+
+**Structure:**
+```text
+.
+  package.json              # quality command: npm run lint -> tsc --noEmit
+  test_runner.py            # manual Google ADK sequential-agent diagnostic
+  check_adk.py              # manual ADK environment diagnostic
+  check_adk_methods.py      # manual ADK API-shape diagnostic
+  public/test_data/
+    agent_project.json      # sample app data
+    project.json            # sample app data
+```
+
+## Test Structure
+
+**Suite Organization:**
+```text
+No describe/it/test suite pattern exists yet.
+```
+
+**Patterns:**
+- There is no shared setup/teardown pattern.
+- There is no arrange/act/assert convention in committed automated tests.
+- Current verification is manual or smoke-level: run type checking, run the Vite build, start services, exercise UI/API flows, or execute root diagnostic scripts.
 
 ## Mocking
 
-None today. Boundaries that will need mocking once tests are added:
+**Framework:**
+- No mocking framework is configured.
+- Existing code directly calls external services and platform APIs: Supabase in `src/lib/supabase.ts`, MongoDB in `server/db.ts`, GitHub APIs in `server/index.ts`, Gemini/ADK in `backend/app.py` and `src/services/gemini.ts`, browser `fetch`, `localStorage`, and Socket.IO.
 
-- `fetch` calls to `/api/*` and `http://localhost:5000/api/*` (`src/lib/api.ts:14`, `src/services/gemini.ts:8,28,51`)
-- Supabase client (`src/lib/supabase.ts:10`) and `supabase.auth.*` methods (`src/contexts/AuthContext.tsx`, `src/components/AuthModal.tsx`)
-- `localStorage` interactions (`src/contexts/ProjectContext.tsx:24,59,62`)
-- MongoDB client (`server/db.ts` — mock `getDb()`)
-- JWT / JWKS verification (`server/auth.ts` — mock `jwt.verify` or `jwks-rsa`)
-- `google.genai.Client.models.generate_content` (`backend/app.py:17,66,122,159`)
+**Patterns:**
+```text
+No vi.mock, jest.mock, monkeypatch, or fixture-based mocking pattern exists yet.
+```
 
-## Fixtures
+**What to Mock When Tests Are Added:**
+- Supabase auth/storage calls used by `src/lib/api.ts`, `src/lib/avatarApi.ts`, `src/lib/supabase.ts`, `server/auth.ts`, and storage helpers in `server/index.ts`.
+- MongoDB access behind `server/db.ts`.
+- External HTTP calls to GitHub in `server/index.ts`.
+- Gemini/ADK calls in `backend/app.py` and the Flask-backed client functions in `src/services/gemini.ts`.
+- Browser APIs used by the frontend, including `fetch`, `localStorage`, timers, and file/blob APIs.
+- Socket.IO terminal execution flows in `src/components/XTerm.tsx`, `src/pages/Workspace.tsx`, and `backend/app.py`.
 
-- Runtime-only: `public/test_data/project.json` conforms to `GeneratedProject` in `src/types.ts:19-28`.
-- No `tests/fixtures/`, `__fixtures__/`, or factory functions exist.
+**What NOT to Mock:**
+- Pure transformation and validation helpers should be tested directly once a runner exists, such as `validateUsername`, `deriveUsernameBase`, `deriveChallengeState`, `matchesSearch`, `pathFromPublicUrl`, and `localUsernameError`.
+- Type-only contracts in `src/types.ts` should be exercised through callers rather than mocked.
+
+## Fixtures and Factories
+
+**Test Data:**
+- Existing sample data is static JSON under `public/test_data/`.
+- Development database fixtures are created imperatively by `scripts/seed-challenges.ts` and `scripts/seed-submissions.ts`.
+- `scripts/seed-submissions.ts` uses deterministic IDs derived from email addresses so repeated runs are idempotent.
+
+**Location:**
+- No dedicated `tests/fixtures/` or factory module exists.
+- If automated tests are introduced, shared fixtures should avoid real credentials and should be separate from production seed scripts unless the seed data is explicitly intended for tests.
 
 ## Coverage
 
-- None enforced. No `c8`, `istanbul`, `nyc`, or `coverage.py` is installed.
-- `.gitignore` includes `coverage/`, suggesting it was anticipated, but no runs are configured.
+**Requirements:**
+- No coverage target is configured.
+- No CI coverage enforcement is visible in the repository.
+
+**Configuration:**
+- No coverage tool is configured.
+- `.gitignore` excludes `coverage/`, so coverage output is anticipated but not currently produced by a script.
+
+**View Coverage:**
+```bash
+# No coverage command exists yet.
+```
 
 ## Test Types
 
-- **Unit / Integration / E2E:** all none.
-- **Manual verification only:** run all three dev servers (`npm run dev`, `npm run dev:server`, `npm run dev:agent`) and exercise flows in the browser. The Generation page's `useTestData` toggle (`src/pages/Generation.tsx:24,35-44`) bypasses the Gemini call for free local checks.
+**Unit Tests:**
+- Not currently present.
+- Highest-value future unit targets are validation and transformation helpers in `server/index.ts`, `src/pages/Profile.tsx`, `src/pages/Challenges.tsx`, `src/lib/avatarApi.ts`, and API error handling in `src/lib/api.ts`.
 
-## Recommended Starting Point
+**Integration Tests:**
+- Not currently present.
+- Highest-value future integration targets are authenticated Express endpoints in `server/index.ts`, MongoDB persistence through `server/db.ts`, Supabase auth middleware in `server/auth.ts`, and Flask generation endpoints in `backend/app.py`.
 
-Not currently used; recommendations for adopting tests:
+**E2E Tests:**
+- Not currently present.
+- Highest-value future E2E flows are sign-in/profile editing, project generation, workspace execution, challenge creation/submission/grading, and public profile browsing.
 
-- **Frontend:** Vitest + React Testing Library (reuses existing Vite config and `tsconfig.json`).
-- **Express server:** Vitest + `supertest` against a mocked `getDb()`.
-- **Flask backend:** `pytest` with Flask's `app.test_client()` and a mocked `genai.Client`.
+**Manual Diagnostics:**
+- `test_runner.py` exercises a minimal Google ADK sequential-agent runner and prints event shapes.
+- `check_adk.py` and `check_adk_methods.py` inspect ADK imports and available fields/methods.
+- These scripts require the Python environment and external packages to be installed, and may require relevant environment configuration.
 
-## Highest-Risk Untested Surfaces
+## Common Patterns
 
-| Area | Files | Risk |
-|------|-------|------|
-| Auth flow | `src/contexts/AuthContext.tsx`, `src/components/AuthModal.tsx`, `server/auth.ts` | Silent auth bypass, broken sign-in |
-| Project persistence | `src/contexts/ProjectContext.tsx`, `server/index.ts` (PUT/DELETE `/api/projects/:id`) | Data loss, double-writes between localStorage and Mongo |
-| AI response parsing | `backend/app.py:74-86,165-177` (markdown-fence stripping + `json.loads`) | Malformed JSON crashes the route |
-| Step-completion logic | `src/pages/Workspace.tsx:143-169`, `backend/app.py:131-185` | Incorrect "complete" verdicts mislead learners |
-| Fetch error handling | `src/lib/api.ts:19-25`, `src/services/gemini.ts:16-21,36-39,59-61` | Silent failures or unhandled UI states |
+**Async Testing:**
+```text
+No automated async test pattern exists yet.
+```
+- App code uses async/await, Promise chains in React effects, route-local `try/catch`, and cancellation flags. Future tests should assert both success and failure states for these flows.
 
-## Common Patterns (Once Tests Exist)
+**Error Testing:**
+```text
+No automated error test pattern exists yet.
+```
+- Error behavior to preserve includes non-OK fetch errors in `src/lib/api.ts`, 401 auth failures in `server/auth.ts`, 400/409 validation responses in `server/index.ts`, and JSON fallback errors in `backend/app.py`.
 
-- **Async:** prefer `async () => { await expect(...) ... }` and `await expect(p).rejects.toThrow(...)` to match the `async/await` + `try/catch` style used throughout the codebase (see `CONVENTIONS.md` → Error Handling).
-- **Error paths:** assert both the thrown-error path AND the fallback-return path for functions like `checkStepCompletion` (`src/services/gemini.ts:64-70`) and the project-load fallback (`src/contexts/ProjectContext.tsx:36-41`).
-- **Snapshots:** not recommended — the codebase favors explicit assertions and has no existing snapshots.
+**Snapshot Testing:**
+- No snapshot testing is used.
+
+---
+
+*Testing analysis: 2026-04-26*
+*Update when test patterns change*

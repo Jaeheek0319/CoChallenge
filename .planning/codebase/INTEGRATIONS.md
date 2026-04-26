@@ -4,124 +4,122 @@
 
 ## APIs & External Services
 
-**AI / LLM:**
-- Google Gemini (via `google-genai` Python SDK) - Powers all AI features
-  - SDK/Client: `google-genai` Python package (`backend/app.py` line 5: `from google import genai`)
-  - Model: `gemma-4-26b-a4b-it` (`backend/app.py` line 19, `MODEL_ID` constant)
-  - Auth: `GEMINI_API_KEY` env var, read via `os.getenv` in `backend/app.py` line 16
-  - Endpoints exposed by the Flask wrapper:
-    - `POST /api/generateProject` - Builds a project lesson JSON from prompt/language/difficulty (`backend/app.py` line 21)
-    - `POST /api/getAIHelp` - Tutor responses for the Workspace chat (`backend/app.py` line 101)
-    - `POST /api/checkStepCompletion` - Grades the user's code against a step's expected solution (`backend/app.py` line 131)
-  - Notes: Response MIME `application/json` requested for structured outputs; markdown code fences are stripped manually
-- `@google/genai` ^1.50.1 - Listed in `package.json` dependencies; no imports detected in `src/`. Vite still injects `GEMINI_API_KEY` into the client bundle (`vite.config.ts` line 11), so a future client-side path exists but is currently unused
+**AI Services:**
+- Google Gemini API - Generates project lessons, AI help, and step-completion feedback
+  - SDK/Client: Python `google-genai` from `backend/requirements.txt`; JavaScript `@google/genai` is listed in `package.json` but no active source import was found
+  - Auth: `GEMINI_API_KEY` env var (`backend/app.py`, `README.md`, `vite.config.ts`)
+  - Model: `gemini-2.5-flash` in `backend/app.py`
+  - Endpoints exposed by local Flask backend: `/api/generateProject`, `/api/getAIHelp`, `/api/checkStepCompletion`
+- Google ADK - Sequential multi-agent pipeline around Gemini generation
+  - SDK/Client: Python `google-adk` (`backend/requirements.txt`, `backend/app.py`)
+  - Runtime behavior: Uses `SequentialAgent`, `LlmAgent`, `Runner`, and `InMemorySessionService`; falls back to direct Gemini SDK calls when ADK import or runner execution fails
 
-**Auth Identity Provider:**
-- Supabase Auth - User signup/login and JWT issuance (see "Authentication & Identity")
+**Internal Service Calls:**
+- Express API - Frontend app API for profiles, projects, challenges, submissions, and GitHub export
+  - Integration method: `fetch` wrapper with Supabase bearer token in `src/lib/api.ts`
+  - Dev routing: Vite proxies `/api` to `http://localhost:${API_PORT || PORT || 3001}` (`vite.config.ts`)
+- Flask AI backend - Frontend project generation and evaluation API
+  - Integration method: direct `fetch` to `http://127.0.0.1:5000/api` (`src/services/gemini.ts`)
+  - Auth: none in current Flask routes
+- Flask-SocketIO terminal backend - Interactive C/C++ execution from the workspace page
+  - Integration method: `socket.io-client` connects to `http://localhost:5000` (`src/pages/Workspace.tsx`)
+  - Events: client emits `execute_code` and `terminal_input`; server emits `terminal_output` (`backend/app.py`, `src/components/XTerm.tsx`)
 
-**Frontend → Gemini wrapper:**
-- Hard-coded backend URL `http://localhost:5000/api` in `src/services/gemini.ts` line 3 (`BACKEND_URL`)
-- Functions: `generateProject`, `getAIHelp`, `checkStepCompletion`
-
-**Frontend → Project API:**
-- Same-origin `/api/*` calls proxied to `http://localhost:3001` via Vite (`vite.config.ts` lines 22-24)
-- `src/lib/api.ts` injects `Authorization: Bearer <supabase access_token>` on every request
+**External APIs:**
+- GitHub OAuth and REST API - Connects a user GitHub account and exports generated projects to repositories
+  - Integration method: REST via built-in `fetch` in Express (`server/index.ts`)
+  - OAuth URL: `https://github.com/login/oauth/authorize`
+  - Token endpoint: `https://github.com/login/oauth/access_token`
+  - API endpoints used: `https://api.github.com/user`, `https://api.github.com/user/repos`, `https://api.github.com/repos/{owner}/{repo}/contents/{path}`
+  - Auth: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, then stored per-user GitHub access token in MongoDB profile documents (`server/index.ts`)
+  - Scope requested: `repo` (`server/index.ts`)
+- Pyodide CDN - Browser-side Python execution in the workspace
+  - Integration method: dynamically loads `https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js` and uses matching `indexURL` (`src/pages/Workspace.tsx`)
+- Google Fonts - Web font CSS import
+  - Integration method: CSS `@import` from `https://fonts.googleapis.com` (`src/index.css`)
 
 ## Data Storage
 
 **Databases:**
-- MongoDB (driver `mongodb` ^7.2.0)
-  - Connection: `MONGODB_URI` env var (`server/db.ts` line 8)
-  - Database name: `projectcode` (hard-coded in `server/db.ts` line 12)
-  - Collection: `projects` (`server/index.ts` lines 41, 71, 81)
-  - Client: native `MongoClient` lazily initialized and cached in `server/db.ts`
-  - Document shape: `ProjectDoc` interface in `server/index.ts` lines 9-21 (`_id`, `userId`, `title`, `description`, `language`, `difficulty`, `learningGoals`, `files`, `steps`, `currentStep`, `updatedAt`)
-- Supabase Postgres - Implicit (managed by Supabase Auth for user records); no direct queries from this codebase
+- MongoDB - Primary application datastore for projects, profiles, challenges, submissions, and Elo history
+  - Connection: `MONGODB_URI` env var (`server/db.ts`)
+  - Client: `mongodb` npm package ^7.2.0 (`package.json`)
+  - Database name: `projectcode` (`server/db.ts`)
+  - Collections observed: `profiles`, `projects`, `challenges`, `challenge_submissions`, `elo_changes` (`server/index.ts`, `scripts/seed-*.ts`)
+  - Migrations: none found; runtime code creates the username index lazily in `ensureIndexes()` (`server/index.ts`)
 
 **File Storage:**
-- Local filesystem only (no S3, GCS, or Supabase Storage integrations detected)
-- Static assets served from `public/` (e.g., `public/test_data/project.json` consumed by `src/pages/Generation.tsx` line 36 when "Use test data" is checked)
+- Supabase Storage - Avatar uploads, public company logos, and private challenge submission ZIP uploads
+  - Frontend client: `@supabase/supabase-js` from `src/lib/supabase.ts`
+  - Server admin client: `@supabase/supabase-js` with service key from `server/index.ts`
+  - Auth/config: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+  - Buckets: `avatars` hard-coded in `src/lib/avatarApi.ts`; `logos` default via `SUPABASE_LOGO_BUCKET`; `challenge-submissions` default via `SUPABASE_SUBMISSION_BUCKET`
+  - Operations: avatar upload/delete/public URL, logo public URL generation, signed upload/download URLs for challenge ZIP files, ZIP removal (`src/lib/avatarApi.ts`, `server/index.ts`, `scripts/seed-challenges.ts`)
 
 **Caching:**
-- In-process JWKS cache via `jwks-rsa` (`server/auth.ts` lines 18-20: `cache: true`, `cacheMaxAge: 10 * 60 * 1000`, `rateLimit: true`)
-- Browser `localStorage` key `project-code-projects` for offline/anonymous project persistence (`src/contexts/ProjectContext.tsx` lines 24, 59-62)
-- No Redis / Memcached / CDN cache layer
+- None found; no Redis or application cache service is configured
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Supabase Auth
-  - Frontend client: `createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)` in `src/lib/supabase.ts` (falls back to `https://placeholder.supabase.co` and `'placeholder'` with a `console.warn` if env is missing)
-  - Session lifecycle handled in `src/contexts/AuthContext.tsx`: `supabase.auth.getSession()` on mount + `onAuthStateChange` subscription
-  - Sign-in / sign-up via email + password in `src/components/AuthModal.tsx` lines 30-32 (`signInWithPassword`, `signUp`)
-  - Sign-out via `supabase.auth.signOut()` in `AuthContext.signOut`
+- Supabase Auth - Email/password sign-up, sign-in, sign-out, and session state
+  - Implementation: `supabase.auth.signInWithPassword`, `supabase.auth.signUp`, `supabase.auth.getSession`, and `supabase.auth.onAuthStateChange` (`src/components/AuthModal.tsx`, `src/contexts/AuthContext.tsx`)
+  - Token transport: Frontend attaches the Supabase access token as an `Authorization: Bearer ...` header for Express API requests (`src/lib/api.ts`)
+  - Server verification: Express validates JWTs with `jsonwebtoken` and `jwks-rsa` against `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` (`server/auth.ts`)
+  - Expected JWT settings: algorithms `ES256` and `RS256`, issuer `${SUPABASE_URL}/auth/v1`, audience `authenticated` (`server/auth.ts`)
 
-**Server-side verification:**
-- `server/auth.ts` `requireAuth` middleware:
-  - Expects `Authorization: Bearer <jwt>` header
-  - Resolves signing keys via `jwks-rsa` against `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`
-  - Verifies with `jsonwebtoken.verify` using algorithms `ES256` and `RS256`, issuer `${SUPABASE_URL}/auth/v1`, audience `authenticated`
-  - Populates `req.userId` from the JWT `sub` claim (typed via global `Express.Request` augmentation)
-- All `/api/projects*` and `/api/me` routes are guarded by `requireAuth` (`server/index.ts` lines 27, 37, 51, 78)
-- `bcryptjs` is declared in `package.json` but unused — password handling is fully delegated to Supabase
+**OAuth Integrations:**
+- GitHub OAuth - Optional account connection for repository export
+  - Credentials: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (`server/index.ts`)
+  - Callback route: `/api/auth/github/callback` (`server/index.ts`)
+  - Token storage: access token stored on the user's MongoDB profile as `githubAccessToken` (`server/index.ts`)
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None detected (no Sentry, Datadog, Bugsnag, Honeybadger, or Rollbar SDKs)
+- None found; no Sentry, Datadog, or similar SDK is configured
+
+**Analytics:**
+- None found
 
 **Logs:**
-- Server: `console.log` on listen (`server/index.ts` line 93); errors returned as JSON `{ error, detail }` payloads
-- Backend: `print(...)` for failure paths in `backend/app.py` (lines 98, 128, 181); Flask `debug=True` in `__main__`
-- Frontend: `console.warn`/`console.error` for missing Supabase env (`src/lib/supabase.ts` line 7) and API failures (`src/contexts/ProjectContext.tsx` lines 31, 38, 67; `src/services/gemini.ts` lines 18, 65)
+- Local stdout/stderr logging only in Express scripts and Flask backend (`server/index.ts`, `backend/app.py`, `scripts/seed-*.ts`)
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Google AI Studio - Referenced in `README.md` (`https://ai.studio/apps/1c6c17b8-8d9f-466d-976c-6a4554218031`) and `metadata.json` (`name: ProjectCode`)
-- No platform-specific config files (`vercel.json`, `netlify.toml`, `Dockerfile`, `fly.toml`, `app.yaml`, `render.yaml`) detected
+- No deploy config was found for Vercel, Netlify, Docker, AWS, or similar platforms
+- README links to a Google AI Studio app view and documents local startup only (`README.md`)
 
 **CI Pipeline:**
-- None detected (no `.github/workflows/`, `.circleci/`, `.gitlab-ci.yml`, or `bitbucket-pipelines.yml`)
+- No `.github/workflows` directory or CI configuration was found
 
 ## Environment Configuration
 
-**Required env vars:**
-- `GEMINI_API_KEY` - Used by `backend/app.py` (Flask Gemini client) and surfaced to the client bundle by Vite (`vite.config.ts` line 11)
-- `VITE_SUPABASE_URL` - Frontend Supabase client (`src/lib/supabase.ts`)
-- `VITE_SUPABASE_ANON_KEY` - Frontend Supabase client (`src/lib/supabase.ts`)
-- `SUPABASE_URL` - Express server JWKS URI + JWT issuer (`server/auth.ts` lines 13, 17, 45)
-- `MONGODB_URI` - Express server Mongo connection string (`server/db.ts` line 8)
-- `PORT` - Optional Express port override, defaults to `3001` (`server/index.ts` line 91)
-- `DISABLE_HMR` - Optional Vite HMR kill switch (`vite.config.ts` line 21)
+**Development:**
+- Required or behavior-changing env vars: `GEMINI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `MONGODB_URI`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_LOGO_BUCKET`, `SUPABASE_SUBMISSION_BUCKET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `API_PORT`, `PORT`, `DISABLE_HMR`
+- Secrets location: `.env*` at repo root; these files are gitignored (`.gitignore`) and README specifically mentions `.env.local`
+- Local process layout: `npm run dev` for Vite, `npm run dev:server` for Express, `npm run dev:agent` or `py backend/app.py` for Flask (`package.json`, `start.sh`)
 
-**Secrets location:**
-- `.env*` files at the repo root, git-ignored (`.gitignore` line 7); README instructs setting `GEMINI_API_KEY` in `.env.local`
-- `dotenv/config` (Node) and `python-dotenv`'s `load_dotenv()` (Python) load these at process startup
+**Staging:**
+- No staging-specific configuration was found
+
+**Production:**
+- No production secrets management or environment-specific deployment configuration was found
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None (Express API exposes only authenticated REST endpoints — `/api/health`, `/api/me`, `/api/projects`, `/api/projects/:id`)
-- Flask backend exposes only the three Gemini wrapper endpoints listed above
+- GitHub OAuth callback - `/api/auth/github/callback`
+  - Verification: uses OAuth `code` exchange and `state` parameter as the user id (`server/index.ts`)
+  - Events: browser redirect after GitHub authorization
 
 **Outgoing:**
-- None (no signed webhook deliveries, no `fetch`/`requests` to external services beyond Gemini and Supabase)
-
-## REST Surface (Internal)
-
-**Express (`server/index.ts`, port 3001, all routes JSON, `requireAuth` unless noted):**
-- `GET /api/health` - Public health probe (line 23)
-- `GET /api/me` - Echoes `userId` and pings Mongo (line 27)
-- `GET /api/projects` - Lists the caller's projects (line 37)
-- `PUT /api/projects/:id` - Upserts a project document (line 51)
-- `DELETE /api/projects/:id` - Deletes a project document (line 78)
-
-**Flask (`backend/app.py`, port 5000, CORS open via `flask_cors.CORS(app)`):**
-- `POST /api/generateProject` (line 21)
-- `POST /api/getAIHelp` (line 101)
-- `POST /api/checkStepCompletion` (line 131)
+- GitHub repository export - Triggered by `POST /api/projects/:id/export`
+  - Endpoint: GitHub create-repository and contents APIs (`server/index.ts`)
+  - Retry logic: none found
 
 ---
 
 *Integration audit: 2026-04-26*
+*Update when adding/removing external services, env vars, storage buckets, or deployment targets*
