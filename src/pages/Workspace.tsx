@@ -7,12 +7,13 @@ import {
   Play, RotateCcw, Save, Trash2, 
   ChevronLeft, ChevronRight, HelpCircle, 
   Layout, Code, Eye, MessageSquare, 
-  Sparkles, CheckCircle2, AlertCircle
+  Sparkles, CheckCircle2, AlertCircle, Terminal
 } from 'lucide-react';
 import { useProjects } from '../hooks/useProjects';
 import { UserProject, ProjectFile } from '../types';
-import { getAIHelp, checkStepCompletion } from '../services/gemini';
 import { cn } from '../lib/utils';
+import { io, Socket } from 'socket.io-client';
+import { XTerm } from '../components/XTerm';
 
 export function Workspace() {
   const { projectId } = useParams();
@@ -32,8 +33,54 @@ export function Workspace() {
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [stepFeedback, setStepFeedback] = useState<{isComplete: boolean, message: string} | null>(null);
+  const [consoleOutput, setConsoleOutput] = useState<string>('');
+  const [isPyodideReady, setIsPyodideReady] = useState(false);
 
   const lastLoadedProjectId = useRef<string | null>(null);
+  const pyodideRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const inputResolverRef = useRef<((val: string) => void) | null>(null);
+  const inputBufferRef = useRef<string>('');
+
+  useEffect(() => {
+    (window as any).promptUserForInput = () => {
+      return new Promise<string>((resolve) => {
+        inputResolverRef.current = resolve;
+        inputBufferRef.current = '';
+      });
+    };
+    return () => {
+      delete (window as any).promptUserForInput;
+    };
+  }, []);
+
+  const handleTerminalInput = (char: string) => {
+    if (inputResolverRef.current) {
+      if (char === '\r') {
+        inputResolverRef.current(inputBufferRef.current);
+        inputResolverRef.current = null;
+      } else if (char === '\x7f') { // Backspace
+        if (inputBufferRef.current.length > 0) {
+          inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+          if ((window as any).writeToTerminal) {
+            (window as any).writeToTerminal('\b \b');
+          }
+        }
+      } else {
+        inputBufferRef.current += char;
+        if ((window as any).writeToTerminal) {
+          (window as any).writeToTerminal(char);
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    socketRef.current = io('http://localhost:5000');
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -78,7 +125,124 @@ export function Workspace() {
     }
   }, [projectId, loading, projects, navigate]);
 
-  const handleRun = () => {
+  useEffect(() => {
+    if (project?.language === 'python') {
+      if ((window as any).loadPyodide || document.getElementById('pyodide-script')) {
+        // Already loaded or loading
+        if ((window as any).loadPyodide && !pyodideRef.current) {
+          (window as any).loadPyodide({
+            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
+          }).then((py: any) => {
+            pyodideRef.current = py;
+            setIsPyodideReady(true);
+          }).catch(console.error);
+        }
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+      script.id = 'pyodide-script';
+      script.onload = async () => {
+        try {
+          const pyodide = await (window as any).loadPyodide({
+            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
+          });
+          pyodideRef.current = pyodide;
+          setIsPyodideReady(true);
+        } catch (e) {
+          console.error("Failed to load Pyodide", e);
+          setConsoleOutput("Error: Failed to initialize Python environment.\\n");
+        }
+      };
+      document.body.appendChild(script);
+    }
+  }, [project?.language]);
+
+  const handleRun = async () => {
+    if (project?.language === 'c' || project?.language === 'cpp') {
+      const isCpp = project.language === 'cpp';
+      const fileName = isCpp ? 'main.cpp' : 'main.c';
+      const codeFile = files.find(f => f.name === fileName);
+      
+      if (!codeFile) {
+        if ((window as any).writeToTerminal) {
+          (window as any).writeToTerminal(`\r\nError: ${fileName} not found.\r\n`);
+        }
+        return;
+      }
+      
+      if ((window as any).clearTerminal) {
+        (window as any).clearTerminal();
+      }
+      
+      if (socketRef.current) {
+        socketRef.current.emit('execute_code', {
+          language: project.language,
+          code: codeFile.content
+        });
+      }
+      return;
+    }
+
+    if (project?.language === 'python') {
+      const pythonFile = files.find(f => f.name === 'main.py');
+      if (!pythonFile) return;
+      
+      if (!pyodideRef.current) {
+        if ((window as any).writeToTerminal) {
+          (window as any).writeToTerminal("\r\nPython environment is still loading...\r\n");
+        }
+        return;
+      }
+      
+      if ((window as any).clearTerminal) {
+        (window as any).clearTerminal();
+      }
+      
+      try {
+        const pyodide = pyodideRef.current;
+        
+        // Let's implement real-time stdout streaming by overriding sys.stdout
+        await pyodide.runPythonAsync(`
+import sys
+import js
+
+class XTermWriter:
+    def write(self, s):
+        js.writeToTerminal(s)
+    def flush(self):
+        pass
+
+sys.stdout = XTermWriter()
+sys.stderr = XTermWriter()
+
+async def async_input(prompt=""):
+    if prompt:
+        js.writeToTerminal(prompt)
+    res = await js.promptUserForInput()
+    js.writeToTerminal(res + "\\r\\n")
+    return res
+
+import builtins
+builtins.input = async_input
+        `);
+        
+        // Transform the user's code to make 'input()' calls awaitable
+        // This allows synchronous-looking code to run in our async terminal environment
+        const transformedCode = pythonFile.content.replace(/\binput\s*\(/g, 'await input(');
+        await pyodide.runPythonAsync(transformedCode);
+        if ((window as any).writeToTerminal) {
+           (window as any).writeToTerminal('\r\n[Process exited]\r\n');
+        }
+      } catch (e: any) {
+        if ((window as any).writeToTerminal) {
+          (window as any).writeToTerminal(`\r\n${e.toString()}\r\n`);
+        }
+      }
+      return;
+    }
+
     const htmlFile = files.find(f => f.name === 'index.html');
     const cssFile = files.find(f => f.name === 'style.css');
     const jsFile = files.find(f => f.name === 'script.js');
@@ -404,14 +568,29 @@ export function Workspace() {
       <div className="w-[400px] flex-shrink-0 flex flex-col bg-slate-900/30">
         <div className="h-1/2 flex flex-col border-b border-slate-800">
           <div className="p-3 border-b border-slate-800 flex items-center gap-2 text-slate-400">
-            <Eye className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-widest">Live Preview</span>
+            {['python', 'c', 'cpp'].includes(project.language) ? <Terminal className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            <span className="text-xs font-bold uppercase tracking-widest">
+              {['python', 'c', 'cpp'].includes(project.language) ? 'Console Output' : 'Live Preview'}
+            </span>
           </div>
-          <div className="flex-1 bg-white">
-            {previewUrl ? (
+          <div className="flex-1 bg-black overflow-y-auto">
+            {['python', 'c', 'cpp'].includes(project.language) ? (
+              <div className="w-full h-full relative">
+                {project.language === 'python' && !isPyodideReady && (
+                  <div className="absolute inset-0 z-10 bg-black/80 flex items-center justify-center text-slate-500 gap-2 font-mono text-sm">
+                    <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                    Initializing Python Environment...
+                  </div>
+                )}
+                <XTerm 
+                  socket={project.language !== 'python' ? socketRef.current : undefined} 
+                  onInput={project.language === 'python' ? handleTerminalInput : undefined}
+                />
+              </div>
+            ) : previewUrl ? (
               <iframe 
                 src={previewUrl} 
-                className="w-full h-full border-none"
+                className="w-full h-full border-none bg-white"
                 title="preview"
               />
             ) : (
