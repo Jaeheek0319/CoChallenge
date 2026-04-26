@@ -22,6 +22,8 @@ import { io, Socket } from 'socket.io-client';
 import { XTerm } from '../components/XTerm';
 import { Notification } from '../components/Notification';
 import { LessonModal } from '../components/LessonModal';
+import { CongratulationsModal } from '../components/CongratulationsModal';
+import confetti from 'canvas-confetti';
 
 
 export function Workspace() {
@@ -47,6 +49,8 @@ export function Workspace() {
   const [isExporting, setIsExporting] = useState(false);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
+  const [showCongratsModal, setShowCongratsModal] = useState(false);
+
 
 
 
@@ -366,6 +370,19 @@ builtins.input = async_input
       });
       if (result.isComplete) {
         setCompletedSteps(prev => Array.from(new Set([...prev, currentStep])));
+        
+        // Show celebratory modal if this was the last step
+        if (currentStep === project.steps.length - 1) {
+          setTimeout(() => {
+            setShowCongratsModal(true);
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#3b82f6', '#fbbf24', '#10b981', '#ef4444']
+            });
+          }, 800);
+        }
       }
     } catch (e) {
       setStepFeedback({
@@ -419,6 +436,12 @@ builtins.input = async_input
         onClose={() => setShowLessonModal(false)}
         title={step?.title || ''}
         lesson={step?.lesson || ''}
+      />
+      <CongratulationsModal
+        isOpen={showCongratsModal}
+        onClose={() => setShowCongratsModal(false)}
+        onExport={handleExport}
+        projectTitle={project.title}
       />
       <Notification 
         isVisible={!!notification}
