@@ -8,11 +8,12 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'login' | 'signup';
+  initialEmail?: string;
 }
 
-export function AuthModal({ isOpen, onClose, initialMode = 'login' }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, initialMode = 'login', initialEmail = '' }: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,12 @@ export function AuthModal({ isOpen, onClose, initialMode = 'login' }: AuthModalP
   useEffect(() => {
     setIsLogin(initialMode === 'login');
   }, [initialMode]);
+
+  useEffect(() => {
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

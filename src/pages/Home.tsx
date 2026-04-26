@@ -1,13 +1,21 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Sparkles, Code, BrainCircuit, Rocket, ShieldCheck, Layers } from 'lucide-react';
 
 export function Home() {
+  const [email, setEmail] = useState('');
+  const navigate = useNavigate();
+
+  const handleSignUp = () => {
+    navigate(`/signup?email=${encodeURIComponent(email)}`);
+  };
+
   return (
     <div className="relative isolate overflow-hidden">
-      <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
+      <div className="fixed inset-0 -z-10 transform-gpu overflow-hidden blur-3xl pointer-events-none">
         <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] animated-hero-bg opacity-90 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"></div>
+        <div className="relative left-[calc(50%+11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[-30deg] animated-hero-bg-right opacity-80 sm:left-[calc(50%+30rem)] sm:w-[72.1875rem]"></div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 pt-20 pb-32 sm:pt-24 lg:px-8">
@@ -71,9 +79,15 @@ export function Home() {
                   <input
                     type="email"
                     placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSignUp()}
                     className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   />
-                  <button className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors whitespace-nowrap">
+                  <button 
+                    onClick={handleSignUp}
+                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors whitespace-nowrap"
+                  >
                     Sign up
                   </button>
                 </div>

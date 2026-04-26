@@ -103,8 +103,9 @@ export function Generation() {
 
   return (
     <div className="relative isolate overflow-hidden">
-      <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
+      <div className="fixed inset-0 -z-10 transform-gpu overflow-hidden blur-3xl pointer-events-none">
         <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] animated-hero-bg opacity-90 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"></div>
+        <div className="relative left-[calc(50%+11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[-30deg] animated-hero-bg-right opacity-80 sm:left-[calc(50%+30rem)] sm:w-[72.1875rem]"></div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 pt-20 pb-32 sm:pt-32 lg:px-8">

@@ -29,6 +29,15 @@
   animation: heroGradientShift 10s ease-in-out infinite, heroGlowPulse 8s ease-in-out infinite alternate;
 }
 
+.animated-hero-bg-right {
+  background-image: radial-gradient(circle at top right, rgba(168, 85, 247, 0.55), transparent 28%),
+                    radial-gradient(circle at 65% 20%, rgba(59, 130, 246, 0.45), transparent 22%),
+                    radial-gradient(circle at 30% 80%, rgba(192, 38, 211, 0.35), transparent 24%);
+  background-size: 220% 220%;
+  background-blend-mode: screen;
+  animation: heroGradientShiftRight 12s ease-in-out infinite, heroGlowPulse 7s ease-in-out infinite alternate;
+}
+
 @keyframes heroGradientShift {
   0%, 100% {
     background-position: 0% 50%;
@@ -38,6 +47,18 @@
   50% {
     background-position: 100% 45%;
     transform: translateX(-8%) rotate(33deg);
+  }
+}
+
+@keyframes heroGradientShiftRight {
+  0%, 100% {
+    background-position: 100% 50%;
+    transform: translateX(0) rotate(-30deg);
+  }
+
+  50% {
+    background-position: 0% 45%;
+    transform: translateX(8%) rotate(-33deg);
   }
 }
 
