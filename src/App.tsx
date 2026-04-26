@@ -5,6 +5,7 @@ import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
 import { Challenges } from './pages/Challenges';
 import { CreateChallenge } from './pages/CreateChallenge';
+import { PreviewChallenge } from './pages/PreviewChallenge';
 import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
@@ -151,6 +152,7 @@ export default function App() {
               <Route path="/generation" element={<Generation />} />
               <Route path="/challenges" element={<Challenges />} />
               <Route path="/create-challenge" element={<CreateChallenge />} />
+              <Route path="/preview-challenge" element={<PreviewChallenge />} />
               <Route path="/school" element={<School />} />
               <Route path="/profile" element={<Profile />} />
             </Routes>

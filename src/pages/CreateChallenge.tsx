@@ -27,6 +27,7 @@ export function CreateChallenge() {
     tags: [] as string[],
     requirements: '',
     resources: '',
+    starterCode: '',
     estimatedTime: '4 hours',
     isCompanyChallenge: false,
     companyName: ''
@@ -77,6 +78,15 @@ export function CreateChallenge() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handlePreview = () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    // Navigate to preview page with form data
+    navigate('/preview-challenge', { state: formData });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -309,11 +319,35 @@ export function CreateChallenge() {
             </div>
           </div>
 
-          {/* Tags */}
+          {/* Starter Code */}
           <div className="glass-panel rounded-2xl p-8 border border-slate-800">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-sm font-bold text-blue-400">
                 4
+              </span>
+              Starter Code (Optional)
+            </h2>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-300 mb-2">
+                Provide Starter Code
+              </label>
+              <textarea
+                value={formData.starterCode}
+                onChange={(e) => handleInputChange('starterCode', e.target.value)}
+                placeholder="Paste starter code that developers can use as a foundation.&#10;&#10;Example:&#10;function calculateSum(arr) {&#10;  // TODO: Implement this function&#10;  return 0;&#10;}"
+                rows={6}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-colors resize-none font-mono text-sm"
+              />
+              <p className="text-xs text-slate-500 mt-2">Leave empty if you don't want to provide starter code.</p>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="glass-panel rounded-2xl p-8 border border-slate-800">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-sm font-bold text-blue-400">
+                5
               </span>
               Tags *
             </h2>
@@ -374,6 +408,13 @@ export function CreateChallenge() {
               className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-300 border border-slate-700 hover:border-slate-600 hover:text-white transition-colors"
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handlePreview}
+              className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-300 border border-blue-500/30 hover:border-blue-500 hover:text-blue-400 transition-colors bg-blue-600/5"
+            >
+              Preview
             </button>
             <button
               type="submit"
