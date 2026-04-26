@@ -23,7 +23,7 @@ export function Home() {
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <span className="inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">
               <Sparkles className="h-4 w-4" />
-              Project-first learning
+              Self-Paced, Project-Based
             </span>
 
             <h1 className="mt-8 text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
@@ -84,7 +84,7 @@ export function Home() {
                     onKeyDown={(e) => e.key === 'Enter' && handleSignUp()}
                     className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   />
-                  <button 
+                  <button
                     onClick={handleSignUp}
                     className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors whitespace-nowrap"
                   >
@@ -186,31 +186,31 @@ renderPreview();`}</code></pre>
                 </div>
                 <span className="rounded-full bg-purple-500/20 text-purple-300 px-3 py-1 text-xs font-semibold border border-purple-500/30">Active</span>
               </div>
-              
+
               <div className="grid gap-4 sm:grid-cols-3">
-                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col items-center justify-center text-center">
-                   <span className="text-2xl mb-1">🥇</span>
-                   <p className="text-xs font-semibold text-amber-400">1st Place</p>
-                   <p className="mt-1 text-[10px] text-amber-400/70 font-mono">+500 ELO</p>
-                 </div>
-                 <div className="rounded-2xl border border-slate-400/30 bg-slate-400/5 p-4 flex flex-col items-center justify-center text-center">
-                   <span className="text-2xl mb-1">🥈</span>
-                   <p className="text-xs font-semibold text-slate-300">2nd Place</p>
-                   <p className="mt-1 text-[10px] text-slate-400 font-mono">+300 ELO</p>
-                 </div>
-                 <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 flex flex-col items-center justify-center text-center">
-                   <span className="text-2xl mb-1">🥉</span>
-                   <p className="text-xs font-semibold text-orange-400">3rd Place</p>
-                   <p className="mt-1 text-[10px] text-orange-400/70 font-mono">+150 ELO</p>
-                 </div>
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col items-center justify-center text-center">
+                  <span className="text-2xl mb-1">🥇</span>
+                  <p className="text-xs font-semibold text-amber-400">1st Place</p>
+                  <p className="mt-1 text-[10px] text-amber-400/70 font-mono">+500 ELO</p>
+                </div>
+                <div className="rounded-2xl border border-slate-400/30 bg-slate-400/5 p-4 flex flex-col items-center justify-center text-center">
+                  <span className="text-2xl mb-1">🥈</span>
+                  <p className="text-xs font-semibold text-slate-300">2nd Place</p>
+                  <p className="mt-1 text-[10px] text-slate-400 font-mono">+300 ELO</p>
+                </div>
+                <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 flex flex-col items-center justify-center text-center">
+                  <span className="text-2xl mb-1">🥉</span>
+                  <p className="text-xs font-semibold text-orange-400">3rd Place</p>
+                  <p className="mt-1 text-[10px] text-orange-400/70 font-mono">+150 ELO</p>
+                </div>
               </div>
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-5 mt-2 shadow-sm">
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-                   <p className="text-sm font-semibold text-white flex items-center gap-2">
-                     <Layers className="h-4 w-4 text-purple-400" />
-                     Global Leaderboard
-                   </p>
+                  <p className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-purple-400" />
+                    Global Leaderboard
+                  </p>
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
