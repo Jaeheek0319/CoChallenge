@@ -8,6 +8,15 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from flask_socketio import SocketIO, emit
+import logging
+import json_repair
+
+# Suppress the "non-text parts" warning from google-genai SDK when tool calling
+class _NoFunctionCallWarning(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "there are non-text parts in the response:" not in record.getMessage()
+
+logging.getLogger("google_genai.types").addFilter(_NoFunctionCallWarning())
 
 try:
     import ptyprocess
@@ -40,7 +49,11 @@ except ImportError:
     print("WARNING: google-adk is not installed or failed to import.")
     adk_available = False
 
-MODEL_ID = "gemini-2.5-flash"
+import re
+import json_repair
+
+MODEL_ID = "gemini-2.5-flash-lite"
+SLOW_MODEL_ID = "gemini-2.5-flash"
 
 if adk_available:
     agent1_idea = LlmAgent(
@@ -64,16 +77,25 @@ if adk_available:
     agent4_step_gen = LlmAgent(
         name="Step_Generator_Agent",
         model=MODEL_ID,
-        instruction="""You are Step 4. For each key functional component, create a step according to a JSON format with 'title', 'explanation', 'task', 'hint', 'solution', and 'starterCode'. 
-        CRITICAL TOKEN OPTIMIZATION & LEARNING ENFORCEMENT: 
-        1. Only the VERY FIRST step (index 0) should contain 'starterCode'. This starter code MUST BE ABSOLUTELY BARE BONES. It MUST NOT contain any project logic, game loops, variables, or solutions. It should ONLY be a basic skeleton (e.g., `<!DOCTYPE html><html>...</html>` or `#include <iostream> int main() { return 0; }`). DO NOT IMPLEMENT THE PROJECT IN THE STARTER CODE.
-        2. For ALL subsequent steps (index 1 and above), set 'starterCode' to an empty string (""). 
-        This ensures the user starts with a blank slate and their progress is maintained as they move through steps without overwriting their code."""
+        instruction="""You are Step 4. Create a structured project lesson in JSON.
+        CRITICAL: Keep explanations concise (max 2-3 sentences) to avoid token limits.
+        
+        SCHEMA:
+        {
+          "title": "...", "description": "...", "language": "...", "difficulty": "...", "learningGoals": [],
+          "files": [{ "name": "...", "language": "...", "content": "..." }],
+          "steps": [{ "title": "...", "explanation": "...", "task": "...", "hint": "...", "solution": "...", "starterCode": { "filename": "..." } }]
+        }
+
+        RULES:
+        1. Only the VERY FIRST step (index 0) should contain 'starterCode' (a bare skeleton).
+        2. All subsequent steps MUST have 'starterCode': {}.
+        3. Ensure the project is functionally complete but lean."""
     )
 
     agent5_refiner = LlmAgent(
         name="Starter_Code_Refiner_Agent",
-        model=MODEL_ID,
+        model=SLOW_MODEL_ID,
         instruction="""You are Step 5. Refine the 'starterCode' for all steps:
         1. Ensure ONLY step 0 has a non-empty 'starterCode'. 
         2. EXTREMELY IMPORTANT: The 'starterCode' for step 0 MUST NOT contain any of the actual project logic or solution. If you see game loops, print statements related to the project, or any completed features in the 'starterCode', YOU MUST DELETE THEM and replace them with a bare minimum empty skeleton. The starter code's purpose is to be a learning tool, so the student must write the logic themselves.
@@ -82,34 +104,18 @@ if adk_available:
 
     agent6_reviser = LlmAgent(
         name="Content_Reviser_Agent",
-        model=MODEL_ID,
-        instruction="""You are Step 6, the final step. Revise the explanation, task, and hint. 
+        model=SLOW_MODEL_ID,
+        instruction="""You are Step 6, the final content reviser. 
+        MANDATORY: Output ONLY the final valid JSON object matching the schema:
+        { "title": "...", "description": "...", "language": "...", "difficulty": "...", "learningGoals": [], "files": [], "steps": [] }
+        
         FINAL QUALITY CHECK: 
-        1. Ensure that ONLY step 0 (index 0) has a non-empty 'starterCode'. All other steps MUST have 'starterCode': "". 
-        2. CRITICAL LEARNING ENFORCEMENT: For step 0, ensure the 'starterCode' is strictly an empty starting point (like an empty HTML body or an empty main function). IT MUST NOT CONTAIN THE SOLUTION OR FULFILL ANY TASK REQUIREMENTS. For example, if the project is a guessing game, the starter code MUST NOT have random number generation or loops. It MUST be totally empty of logic.
+        1. Ensure ONLY step 0 (index 0) has a non-empty 'starterCode'. All other steps MUST have 'starterCode': "". 
+        2. CRITICAL LEARNING ENFORCEMENT: Step 0's 'starterCode' MUST be a bare skeleton (e.g., `<!DOCTYPE html><html>...</html>` or `int main() { return 0; }`). IT MUST NOT contain any project logic, game loops, or solutions.
         3. CRITICAL: If the Language is Python, use exactly one file named 'main.py'. If C, use exactly one file named 'main.c'. If C++, use exactly one file named 'main.cpp'. If Web, use 'index.html', 'style.css', 'script.js' etc.
-        IMPORTANT: Your output MUST be ONLY a JSON object representing a structured project lesson, exactly matching this schema:
-        {
-          "title": "Project Title",
-          "description": "Short description of the project",
-          "language": "the language specified",
-          "difficulty": "the difficulty level",
-          "learningGoals": ["Goal 1", "Goal 2"],
-          "files": [
-            { "name": "filename (e.g. main.py, main.c, main.cpp, or index.html)", "language": "language name", "content": "..." }
-          ],
-          "steps": [
-            {
-              "title": "Step title",
-              "explanation": "Detailed explanation of concepts",
-              "task": "What the user needs to do",
-              "hint": "A subtle hint",
-              "solution": "The final code for this step",
-              "starterCode": { "filename": "starter code for this step" }
-            }
-          ]
-        }
-        Return ONLY the JSON. No markdown, no backticks."""
+        
+        Ensure all Python code blocks are properly escaped and strings are terminated.
+        Be concise and keep the response under 12k characters if possible."""
     )
 
     pipeline = SequentialAgent(
@@ -174,37 +180,26 @@ async def generate_project():
                     print(".", end="", flush=True)
                     event_text = ""
                     
-                    # 1. Check for top-level text attribute
-                    if hasattr(event, 'text') and event.text:
-                        event_text = event.text
+                    # Robust text extraction that avoids triggering SDK warnings for tool calls
+                    parts = []
                     
-                    # 2. Check for content object (common in ADK)
+                    # 1. Check candidates (for GenerateContentResponse)
+                    if hasattr(event, 'candidates') and event.candidates:
+                        parts = event.candidates[0].content.parts
+                    # 2. Check content (common in ADK events)
                     elif hasattr(event, 'content') and event.content:
-                        c = event.content
-                        if hasattr(c, 'text') and c.text:
-                            event_text = c.text
-                        elif hasattr(c, 'parts') and c.parts:
-                            for p in c.parts:
-                                # Skip internal reasoning parts if present
-                                if hasattr(p, 'thought') and p.thought:
-                                    continue
-                                if hasattr(p, 'text') and p.text:
-                                    event_text += p.text
-                                    
-                    # 3. Check for message object (fallback)
+                        if hasattr(event.content, 'parts') and event.content.parts:
+                            parts = event.content.parts
+                    # 3. Check message (fallback)
                     elif hasattr(event, 'message') and hasattr(event.message, 'content'):
-                        msg = event.message.content
-                        if hasattr(msg, 'text') and msg.text:
-                            event_text = msg.text
-                        elif hasattr(msg, 'parts') and msg.parts:
-                            for p in msg.parts:
-                                if hasattr(p, 'thought') and p.thought: continue
-                                if hasattr(p, 'text') and p.text:
-                                    event_text += p.text
-                        elif isinstance(msg, list):
-                            for p in msg:
-                                if hasattr(p, 'text') and p.text:
-                                    event_text += p.text
+                        if hasattr(event.message.content, 'parts') and event.message.content.parts:
+                            parts = event.message.content.parts
+                    
+                    # Concatenate only text parts, ignoring function_call/thought parts here
+                    if parts:
+                        for p in parts:
+                            if hasattr(p, 'text') and p.text:
+                                event_text += p.text
                     
                     if event_text.strip():
                         final_content = event_text
@@ -257,7 +252,25 @@ async def generate_project():
                 final_content = final_content[:-3]
         final_content = final_content.strip()
         
-        project_data = json.loads(final_content)
+        # Post-processing optimization: use json_repair to instantly fix common JSON syntax/truncation issues
+        try:
+            # json_repair.loads is a drop-in replacement for json.loads that handles mangled JSON
+            project_data = json_repair.loads(final_content)
+            
+            # If it's a string (which can happen with some repair cases), try one more parse
+            if isinstance(project_data, str):
+                project_data = json.loads(project_data)
+        except Exception as e:
+            print(f"[Post-Process] Fast repair failed, attempting fallback extraction: {e}")
+            import re
+            json_match = re.search(r'(\{.*\})', final_content, re.DOTALL)
+            if json_match:
+                try:
+                    project_data = json_repair.loads(json_match.group(1))
+                except:
+                    raise Exception("Could not recover JSON from agent output even with repair.")
+            else:
+                raise
         
         # Merge agent output with saved metadata
         project_metadata.update(project_data)
@@ -438,4 +451,4 @@ def handle_terminal_input(data):
             print(f"Failed to write to pty: {e}")
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
