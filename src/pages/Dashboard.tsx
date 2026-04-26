@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useProjects } from '../hooks/useProjects';
-import { Clock, CheckCircle, Code2, Trash2, ArrowRight, Plus } from 'lucide-react';
+import { Clock, CheckCircle, Code2, Trash2, ArrowRight, Plus, MoreVertical, Github, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 
 type FilterType = 'all' | 'completed' | 'in-progress';
 
@@ -10,6 +11,26 @@ export function Dashboard() {
   const { projects, loading } = useProjects();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  const handleExport = async (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (exportingId) return;
+    setExportingId(projectId);
+    
+    try {
+      const res = await api.post<{success: boolean, url: string}>(`/api/projects/${projectId}/export`, {});
+      if (res.success) {
+        window.open(res.url, '_blank');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Export failed. Ensure you are connected to GitHub in your Profile.');
+    } finally {
+      setExportingId(null);
+    }
+  };
 
   const completedProjects = projects.filter(p => p.currentStep === p.steps.length - 1);
   const inProgressProjects = projects.filter(p => p.currentStep < p.steps.length - 1);
@@ -141,17 +162,44 @@ export function Dashboard() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className="glass-panel rounded-2xl overflow-hidden hover:border-slate-700 transition-all group"
+                className="relative glass-panel rounded-2xl hover:border-slate-700 transition-all group hover:z-50"
               >
                 <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
-                      {project.language === 'html-css-js' ? 'Web' : project.language}
+                  <div className="flex items-center justify-between mb-4 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                        {project.language === 'html-css-js' ? 'Web' : project.language}
+                      </div>
+                      <div className="text-xs text-slate-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {new Date(project.updatedAt).toLocaleDateString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {new Date(project.updatedAt).toLocaleDateString()}
-                    </div>
+
+                    {project.currentStep === project.steps.length - 1 && (
+                      <div className="relative group/menu">
+                        <button 
+                          className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-slate-800 rounded-lg transition-all text-slate-400 hover:text-white"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                        <div className="absolute left-0 top-full mt-1 w-44 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-20">
+                          <button 
+                            disabled={exportingId === project.id}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
+                            onClick={(e) => handleExport(project.id, e)}
+                          >
+                            {exportingId === project.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                            ) : (
+                              <Github className="w-4 h-4" />
+                            )}
+                            {exportingId === project.id ? 'Exporting...' : 'Export to GitHub'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <h3 className="text-xl font-bold mb-2 group-hover:text-blue-400 transition-colors">{project.title}</h3>
