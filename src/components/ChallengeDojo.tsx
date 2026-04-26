@@ -50,11 +50,6 @@ const PLACEMENT_LABEL: Record<1 | 2 | 3, string> = {
   3: '🥉 3rd place',
 };
 
-const PLACEMENT_ELO: Record<1 | 2 | 3, number> = {
-  1: 200,
-  2: 100,
-  3: 50,
-};
 
 export function ChallengeDojo() {
   const navigate = useNavigate();
@@ -201,7 +196,7 @@ function SubmissionRow({
       {s.placement && ch.verified && (
         <div className="mb-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-200">
           <Trophy className="w-3.5 h-3.5" />
-          {PLACEMENT_LABEL[s.placement]} · +{PLACEMENT_ELO[s.placement]} elo
+          {PLACEMENT_LABEL[s.placement]}
         </div>
       )}
       {s.placement && !ch.verified && (
