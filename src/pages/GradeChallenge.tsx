@@ -34,6 +34,13 @@ interface ApiChallenge {
     rationale: { first: string; second: string; third: string };
     gradedAt: string;
   } | null;
+  ranked?: boolean;
+  rankingDetail?: {
+    ranking: string[];
+    deltas: number[];
+    reasoning: string;
+    rankedAt: string;
+  };
 }
 
 interface ApiSubmissionWithAuthor {
@@ -60,7 +67,6 @@ interface ApiSubmissionWithAuthor {
 
 type Slot = 'first' | 'second' | 'third';
 const SLOT_LABEL: Record<Slot, string> = { first: '1st', second: '2nd', third: '3rd' };
-const SLOT_ELO: Record<Slot, number> = { first: 200, second: 100, third: 50 };
 
 export function GradeChallenge() {
   const { challengeId } = useParams<{ challengeId: string }>();
@@ -78,7 +84,19 @@ export function GradeChallenge() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<{ deltas: Array<{ userId: string; delta: number }> } | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const [ranking, setRanking] = useState(false);
+  const [rankError, setRankError] = useState<string | null>(null);
+  const [rankResult, setRankResult] = useState<{
+    rankingDetail: {
+      ranking: string[];
+      deltas: number[];
+      reasoning: string;
+      rankedAt: string;
+    };
+    eloChanges: Array<{ userId: string; delta: number; newRating: number; reason: string }>;
+  } | null>(null);
 
   useEffect(() => {
     if (!challengeId || authLoading) return;
@@ -127,7 +145,9 @@ export function GradeChallenge() {
   const usedUserIds = new Set(Object.values(picks).filter(Boolean));
   const isCreator = user && challenge && user.id === challenge.authorId;
   const alreadyGraded = Boolean(challenge?.podium);
+  const alreadyRanked = Boolean(challenge?.ranked);
   const canGrade = isCreator && challenge?.state === 'closed' && !alreadyGraded;
+  const canRank = isCreator && alreadyGraded && !alreadyRanked;
 
   const handlePick = (slot: Slot, userId: string) => {
     setPicks((p) => ({ ...p, [slot]: userId }));
@@ -162,13 +182,36 @@ export function GradeChallenge() {
         },
       });
       setChallenge(result.challenge);
-      setSaved({
-        deltas: result.eloChanges.map((c) => ({ userId: c.userId, delta: c.delta })),
-      });
+      setSaved(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRunRanking = async () => {
+    if (!challengeId || !canRank) return;
+    setRankError(null);
+    setRanking(true);
+    try {
+      const result = await api.post<{
+        ranked: boolean;
+        verified: boolean;
+        rankingDetail: {
+          ranking: string[];
+          deltas: number[];
+          reasoning: string;
+          rankedAt: string;
+        };
+        eloChanges: Array<{ userId: string; delta: number; newRating: number; reason: string }>;
+      }>(`/api/challenges/${challengeId}/rank`, {});
+      setRankResult({ rankingDetail: result.rankingDetail, eloChanges: result.eloChanges });
+      setChallenge((c) => (c ? { ...c, ranked: true, rankingDetail: result.rankingDetail } : c));
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'Ranking failed');
+    } finally {
+      setRanking(false);
     }
   };
 
@@ -262,11 +305,11 @@ export function GradeChallenge() {
           {challenge.verified ? (
             <div className="inline-flex items-center gap-2 text-xs text-blue-300 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-full">
               <ShieldCheck className="w-3.5 h-3.5" />
-              Verified · podium picks award elo (+{SLOT_ELO.first} / +{SLOT_ELO.second} / +{SLOT_ELO.third})
+              Verified · elo is allocated when you run the AI ranking step below
             </div>
           ) : (
             <div className="inline-flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-full">
-              Unverified · grading is recorded but no elo is awarded
+              Unverified · grading is recorded but no elo will be awarded
             </div>
           )}
         </motion.div>
@@ -283,11 +326,7 @@ export function GradeChallenge() {
           <Banner
             tone="success"
             title="Grading saved"
-            body={
-              challenge.verified
-                ? `Elo applied: ${saved.deltas.map((d) => `+${d.delta}`).join(', ') || 'none (no podium picks)'}`
-                : 'Podium recorded. No elo awarded for unverified challenges.'
-            }
+            body="Podium picks are locked. Run AI ranking below to allocate elo (verified challenges only)."
           />
         )}
 
@@ -358,8 +397,125 @@ export function GradeChallenge() {
                 </p>
               </div>
             )}
+
+            {(canRank || alreadyRanked || rankResult) && (
+              <div className="glass-panel rounded-2xl p-6 border border-slate-800 mt-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy className="w-5 h-5 text-amber-400" />
+                  <h2 className="text-xl font-bold">AI ranking & elo</h2>
+                </div>
+                <p className="text-sm text-slate-500 mb-4">
+                  {challenge.verified
+                    ? 'Locks the podium picks at the top, asks Gemini to semantically rank the remaining submissions, then distributes truncated-normal elo deltas in [-200, +200].'
+                    : 'Locks the podium picks at the top and asks Gemini to semantically rank the remaining submissions. Unverified challenges do not award elo.'}
+                </p>
+
+                {rankError && (
+                  <div className="p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300">
+                    {rankError}
+                  </div>
+                )}
+
+                {(rankResult || alreadyRanked) && challenge.rankingDetail ? (
+                  <RankingResult
+                    detail={rankResult?.rankingDetail ?? challenge.rankingDetail!}
+                    submissions={submissions}
+                    podium={challenge.podium}
+                    verified={challenge.verified}
+                  />
+                ) : canRank ? (
+                  <button
+                    onClick={handleRunRanking}
+                    disabled={ranking}
+                    className="w-full px-6 py-4 rounded-xl font-bold bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all active:scale-95 shadow-lg shadow-amber-900/30 flex items-center justify-center gap-2"
+                  >
+                    {ranking ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Asking Gemini…
+                      </>
+                    ) : (
+                      <>
+                        <Trophy className="w-4 h-4" />
+                        Run AI ranking
+                      </>
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function RankingResult({
+  detail,
+  submissions,
+  podium,
+  verified,
+}: {
+  detail: { ranking: string[]; deltas: number[]; reasoning: string; rankedAt: string };
+  submissions: ApiSubmissionWithAuthor[];
+  podium: ApiChallenge['podium'];
+  verified: boolean;
+}) {
+  const userMap = new Map(submissions.map((s) => [s.userId, s]));
+  const podiumIds = new Set(
+    [podium?.firstUserId, podium?.secondUserId, podium?.thirdUserId].filter(Boolean) as string[],
+  );
+
+  return (
+    <div>
+      {detail.reasoning && (
+        <div className="p-3 mb-4 bg-slate-900/60 border border-slate-800 rounded-lg text-sm text-slate-300 italic">
+          “{detail.reasoning}”
+        </div>
+      )}
+      <div className="space-y-2">
+        {detail.ranking.map((userId, i) => {
+          const sub = userMap.get(userId);
+          const delta = detail.deltas[i];
+          const isPodium = podiumIds.has(userId);
+          const placement = isPodium ? `${i + 1}` : `#${i + 1}`;
+          return (
+            <div
+              key={userId}
+              className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
+                isPodium
+                  ? 'bg-violet-500/10 border-violet-500/20'
+                  : 'bg-slate-900/40 border-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                    isPodium ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  {placement}
+                </span>
+                <span className="font-medium truncate">
+                  {sub?.author.fullName || `@${sub?.author.username ?? userId.slice(0, 8)}`}
+                </span>
+              </div>
+              {verified ? (
+                <span
+                  className={`font-bold text-sm ${
+                    delta > 0 ? 'text-emerald-400' : delta < 0 ? 'text-red-400' : 'text-slate-400'
+                  }`}
+                >
+                  {delta > 0 ? '+' : ''}
+                  {delta} elo
+                </span>
+              ) : (
+                <span className="text-xs text-slate-500 italic">no elo (unverified)</span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -556,9 +712,10 @@ function PodiumSlot({
             <p className="text-xs text-slate-500 mt-1 truncate">{pickedSub.author.email}</p>
           )}
         </div>
-        {verified && pickedUserId && (
+        {pickedUserId && (
           <span className="text-xs font-bold text-emerald-300 flex items-center gap-1 flex-shrink-0">
-            <Check className="w-3.5 h-3.5" />+{SLOT_ELO[slot]} elo
+            <Check className="w-3.5 h-3.5" />
+            picked
           </span>
         )}
       </div>

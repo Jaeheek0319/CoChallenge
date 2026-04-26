@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { randomUUID } from 'crypto';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
 import { getDb } from './db';
 import { requireAuth } from './auth';
 
@@ -30,6 +31,13 @@ interface Podium {
   gradedAt: string;
 }
 
+interface AIRankingDetail {
+  ranking: string[];
+  deltas: number[];
+  reasoning: string;
+  rankedAt: string;
+}
+
 interface ChallengeDoc {
   _id: string;
   authorId: string;
@@ -50,6 +58,8 @@ interface ChallengeDoc {
   likes: number;
   dueDate: string;
   podium: Podium | null;
+  ranked?: boolean;
+  rankingDetail?: AIRankingDetail;
   createdAt: string;
 }
 
@@ -141,11 +151,104 @@ async function deleteSubmissionObject(path: string) {
 
 const ALLOWED_DIFFICULTIES = new Set(['Beginner', 'Intermediate', 'Advanced']);
 const ELO_STARTING_VALUE = 500;
-const PODIUM_DELTAS: [number, number, number] = [200, 100, 50];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_YEAR_MS = 365 * ONE_DAY_MS;
 const SUBMISSION_NOTES_MAX = 4000;
 const SUBMISSION_URL_MAX = 500;
+
+// ─── AI ranking ────────────────────────────────────────────────────────────
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? '';
+const RANKER_MODEL = process.env.RANKER_MODEL ?? 'gemini-2.5-flash';
+const RANKER_MIN_DELTA = -200;
+const RANKER_MAX_DELTA = 200;
+const genai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
+
+/**
+ * Min-max normalized deltas. Returns N values in descending order, linearly
+ * spaced from RANKER_MAX_DELTA (best, index 0) to RANKER_MIN_DELTA (worst,
+ * index N-1). Deterministic, no randomness.
+ *   N=1 → [0]   (no relative ranking possible with a single submission)
+ *   N=2 → [max, min]
+ *   N=5 → [200, 100, 0, -100, -200]
+ */
+function minMaxNormDeltas(n: number): number[] {
+  if (n <= 0) return [];
+  if (n === 1) return [0];
+  const range = RANKER_MIN_DELTA - RANKER_MAX_DELTA;
+  return Array.from({ length: n }, (_, i) =>
+    Math.round(RANKER_MAX_DELTA + (i * range) / (n - 1)),
+  );
+}
+
+async function rankSubmissionsWithAI(
+  challenge: ChallengeDoc,
+  submissions: SubmissionDoc[],
+): Promise<{ ranking: string[]; reasoning: string }> {
+  if (!genai) throw new Error('GEMINI_API_KEY not configured');
+  if (submissions.length === 0) return { ranking: [], reasoning: '' };
+
+  const submissionBlock = submissions
+    .map(
+      (s) =>
+        `[${s.userId}]
+  GitHub: ${s.githubUrl || '(none)'}
+  Deployed: ${s.deployedUrl || '(none)'}
+  Notes: ${s.notes || '(none)'}`,
+    )
+    .join('\n\n');
+
+  const prompt = `You are an expert evaluator for coding challenge submissions. Rank these submissions from BEST to WORST based on how well they appear to satisfy the challenge requirements.
+
+CHALLENGE TITLE: ${challenge.title}
+DESCRIPTION: ${challenge.description}
+REQUIREMENTS: ${challenge.requirements || '(none provided)'}
+DIFFICULTY: ${challenge.difficulty}
+
+You can only see submission metadata (GitHub URL, deployed demo URL, builder's notes). You cannot inspect actual code. Use signals like: presence of a GitHub repo, presence of a working demo, depth and clarity of notes, alignment with stated requirements.
+
+SUBMISSIONS:
+${submissionBlock}
+
+Return ONLY valid JSON. The "ranking" array must contain ALL the userIds above, ordered from best to worst, no duplicates, no extras.
+{
+  "ranking": ["userId-best", "userId-second-best", "..."],
+  "reasoning": "one or two sentence summary"
+}`;
+
+  const response = await genai.models.generateContent({
+    model: RANKER_MODEL,
+    contents: prompt,
+    config: { responseMimeType: 'application/json' },
+  });
+
+  const text = (response.text ?? '').trim();
+  let parsed: { ranking?: unknown; reasoning?: unknown };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`AI returned invalid JSON: ${text.slice(0, 200)}`);
+  }
+  const ranking = Array.isArray(parsed.ranking)
+    ? parsed.ranking.filter((x): x is string => typeof x === 'string')
+    : [];
+  const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : '';
+  return { ranking, reasoning };
+}
+
+async function reverseEloChangesForChallenge(challengeId: string): Promise<number> {
+  const db = await getDb();
+  const changes = await db
+    .collection<EloChangeDoc>('elo_changes')
+    .find({ challengeId })
+    .toArray();
+  for (const ch of changes) {
+    await db
+      .collection<ProfileDoc>('profiles')
+      .updateOne({ _id: ch.userId }, { $inc: { elo: -ch.delta } });
+  }
+  await db.collection('elo_changes').deleteMany({ challengeId });
+  return changes.length;
+}
 
 function deriveChallengeState(doc: ChallengeDoc): 'open' | 'closed' | 'graded' {
   if (doc.podium) return 'graded';
@@ -1307,24 +1410,130 @@ app.post('/api/challenges/:id/grade', requireAuth, async (req, res) => {
       .collection<ChallengeDoc>('challenges')
       .updateOne({ _id: challenge._id }, { $set: { podium } });
 
-    // Apply elo stub for verified challenges only.
+    // Elo is allocated by /api/challenges/:id/rank, not at grade time.
+    res.json({
+      challenge: { ...challengeToResponse({ ...challenge, podium }) },
+      eloChanges: [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'grade failed', detail: String(err) });
+  }
+});
+
+// ─── AI ranking — creator only, after grading ──────────────────────────────
+app.post('/api/challenges/:id/rank', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenge = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.id });
+    if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+    if (challenge.authorId !== req.userId) {
+      return res.status(403).json({ error: 'only challenge creator can rank' });
+    }
+    if (!challenge.podium) {
+      return res.status(400).json({ error: 'grade the challenge first' });
+    }
+    if (challenge.ranked) {
+      return res.status(409).json({ error: 'already ranked' });
+    }
+
+    const submissions = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .find({ challengeId: challenge._id, locked: true })
+      .toArray();
+    if (submissions.length === 0) {
+      return res.status(400).json({ error: 'no submissions to rank' });
+    }
+
+    const podium = challenge.podium;
+    const podiumIds: string[] = [
+      podium.firstUserId,
+      podium.secondUserId,
+      podium.thirdUserId,
+    ].filter((x): x is string => Boolean(x));
+    const submissionUserIds = new Set(submissions.map((s) => s.userId));
+    const validPodiumIds = podiumIds.filter((id) => submissionUserIds.has(id));
+    const nonPodium = submissions.filter((s) => !validPodiumIds.includes(s.userId));
+
+    let aiRanking: string[] = [];
+    let aiReasoning = '';
+    if (nonPodium.length > 0) {
+      try {
+        const result = await rankSubmissionsWithAI(challenge, nonPodium);
+        const validNonPodiumIds = new Set(nonPodium.map((s) => s.userId));
+        // Keep only ids the AI returned that are real non-podium submitters,
+        // dedupe, then append any missing ones (shouldn't happen but defensive).
+        const seen = new Set<string>();
+        for (const id of result.ranking) {
+          if (validNonPodiumIds.has(id) && !seen.has(id)) {
+            seen.add(id);
+            aiRanking.push(id);
+          }
+        }
+        for (const s of nonPodium) {
+          if (!seen.has(s.userId)) aiRanking.push(s.userId);
+        }
+        aiReasoning = result.reasoning;
+      } catch (err) {
+        aiReasoning = `AI ranking unavailable; used random fallback. (${
+          err instanceof Error ? err.message : String(err)
+        })`;
+        aiRanking = nonPodium
+          .map((s) => s.userId)
+          .sort(() => Math.random() - 0.5);
+      }
+    }
+
+    // Reverse the stub elo applied during grading
+    const reversed = await reverseEloChangesForChallenge(challenge._id);
+
+    // Generate min-max normalized deltas (already descending: max → min)
+    const fullOrder = [...validPodiumIds, ...aiRanking];
+    const deltas = minMaxNormDeltas(fullOrder.length);
+
     const eloChanges: EloChangeDoc[] = [];
     if (challenge.verified) {
-      for (let i = 0; i < ids.length; i++) {
-        const userId = ids[i];
-        if (!userId) continue;
-        const reason = `Placed ${i + 1}${['st', 'nd', 'rd'][i]} in "${challenge.title}"`;
-        const change = await applyElo(userId, challenge._id, PODIUM_DELTAS[i], reason);
+      for (let i = 0; i < fullOrder.length; i++) {
+        const userId = fullOrder[i];
+        const delta = deltas[i];
+        const podiumIdx = validPodiumIds.indexOf(userId);
+        const place =
+          podiumIdx === 0
+            ? 'Placed 1st'
+            : podiumIdx === 1
+              ? 'Placed 2nd'
+              : podiumIdx === 2
+                ? 'Placed 3rd'
+                : `Ranked #${i + 1}`;
+        const reason = `${place} in "${challenge.title}"`;
+        const change = await applyElo(userId, challenge._id, delta, reason);
         eloChanges.push(change);
       }
     }
 
+    const rankingDetail: AIRankingDetail = {
+      ranking: fullOrder,
+      deltas,
+      reasoning: aiReasoning,
+      rankedAt: new Date().toISOString(),
+    };
+    await db
+      .collection<ChallengeDoc>('challenges')
+      .updateOne(
+        { _id: challenge._id },
+        { $set: { ranked: true, rankingDetail } },
+      );
+
     res.json({
-      challenge: { ...challengeToResponse({ ...challenge, podium }) },
+      ranked: true,
+      verified: challenge.verified,
+      stubDeltasReversed: reversed,
+      rankingDetail,
       eloChanges,
     });
   } catch (err) {
-    res.status(500).json({ error: 'grade failed', detail: String(err) });
+    res.status(500).json({ error: 'rank failed', detail: String(err) });
   }
 });
 
