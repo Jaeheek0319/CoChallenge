@@ -12,6 +12,7 @@ import { GradeChallenge } from './pages/GradeChallenge';
 import { ChallengeDojoPage } from './pages/ChallengeDojoPage';
 import { MyChallenges } from './pages/MyChallenges';
 import { School } from './pages/School';
+import { SchoolProjectPreview } from './pages/SchoolProjectPreview';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
 import { PublicProfile } from './pages/PublicProfile';
@@ -213,6 +214,7 @@ export default function App() {
             <Route path="/challenge-dojo" element={<ChallengeDojoPage />} />
             <Route path="/my-challenges" element={<MyChallenges />} />
             <Route path="/school" element={<School />} />
+            <Route path="/school/:id" element={<SchoolProjectPreview />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/u/:username" element={<PublicProfile />} />
           </Routes>

@@ -20,6 +20,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "bcryptjs": "^3.0.3",
+    "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "express": "^4.22.1",
@@ -36,9 +37,11 @@
     "socket.io-client": "^4.8.3",
     "supabase": "^2.95.2",
     "tailwind-merge": "^3.5.0",
+    "undici": "^8.1.0",
     "xterm": "^5.3.0"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/express": "^4.17.25",
     "@types/node": "^22.19.17",
     "@types/react": "^19.0.0",

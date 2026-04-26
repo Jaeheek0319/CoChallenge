@@ -19,9 +19,17 @@ import { UserProject, ProjectFile } from '../types';
 import { getAIHelp, checkStepCompletion } from '../services/gemini';
 import { cn } from '../lib/utils';
 import { io, Socket } from 'socket.io-client';
+<<<<<<< HEAD
 import { XTerm } from '../components/XTerm';
 import { Notification } from '../components/Notification';
 import { LessonModal } from '../components/LessonModal';
+=======
+import { XTerm } from '../components/XTerm';
+import { Notification } from '../components/Notification';
+import { LessonModal } from '../components/LessonModal';
+import { CongratulationsModal } from '../components/CongratulationsModal';
+import confetti from 'canvas-confetti';
+>>>>>>> 5ab57420638ce6563d5eec3f100cb0066dd4b9d8
 
 
 export function Workspace() {
@@ -43,6 +51,7 @@ export function Workspace() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [stepFeedback, setStepFeedback] = useState<{isComplete: boolean, message: string} | null>(null);
   const [consoleOutput, setConsoleOutput] = useState<string>('');
+<<<<<<< HEAD
   const [isPyodideReady, setIsPyodideReady] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
@@ -50,6 +59,17 @@ export function Workspace() {
 
 
 
+=======
+  const [isPyodideReady, setIsPyodideReady] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+  const [showLessonModal, setShowLessonModal] = useState(false);
+  const [showCongratsModal, setShowCongratsModal] = useState(false);
+
+
+
+
+>>>>>>> 5ab57420638ce6563d5eec3f100cb0066dd4b9d8
 
 
   const lastLoadedProjectId = useRef<string | null>(null);
@@ -371,6 +391,19 @@ builtins.input = async_input
       });
       if (result.isComplete) {
         setCompletedSteps(prev => Array.from(new Set([...prev, currentStep])));
+        
+        // Show celebratory modal if this was the last step
+        if (currentStep === project.steps.length - 1) {
+          setTimeout(() => {
+            setShowCongratsModal(true);
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#3b82f6', '#fbbf24', '#10b981', '#ef4444']
+            });
+          }, 800);
+        }
       }
     } catch (e) {
       setStepFeedback({
@@ -424,6 +457,12 @@ builtins.input = async_input
         onClose={() => setShowLessonModal(false)}
         title={step?.title || ''}
         lesson={step?.lesson || ''}
+      />
+      <CongratulationsModal
+        isOpen={showCongratsModal}
+        onClose={() => setShowCongratsModal(false)}
+        onExport={handleExport}
+        projectTitle={project.title}
       />
       <Notification 
         isVisible={!!notification}
@@ -495,7 +534,7 @@ builtins.input = async_input
                 <CheckCircle2 className="w-4 h-4 text-slate-500 group-open:text-green-400" />
               </summary>
               <div className="p-3 pt-0 text-sm font-mono bg-slate-900/50 border-t border-slate-800/50 whitespace-pre-wrap">
-                {step.solution.trim().replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '')}
+                {renderSolution(step.solution)}
               </div>
             </details>
           </div>
@@ -767,4 +806,16 @@ builtins.input = async_input
       </div>
     </div>
   );
+}
+
+function renderSolution(solution: unknown): string {
+  if (typeof solution === 'string') {
+    return solution.trim().replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '');
+  }
+  if (solution && typeof solution === 'object') {
+    return Object.entries(solution as Record<string, unknown>)
+      .map(([file, code]) => `=== ${file} ===\n${typeof code === 'string' ? code : JSON.stringify(code)}`)
+      .join('\n\n');
+  }
+  return '';
 }
