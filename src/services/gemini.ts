@@ -1,6 +1,6 @@
 import { GeneratedProject, Language, Difficulty } from "../types";
 
-const BACKEND_URL = "http://localhost:5000/api";
+const BACKEND_URL = "http://127.0.0.1:5000/api";
 
 export async function generateProject(prompt: string, language: Language, difficulty: Difficulty): Promise<GeneratedProject> {
   console.log("Sent prompt to backend");

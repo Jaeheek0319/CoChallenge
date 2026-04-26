@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -194,8 +195,12 @@ export function Workspace() {
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
           <div className="mb-6">
             <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
-            <div className="prose prose-invert prose-sm">
-              <p className="text-slate-300 leading-relaxed">{step.explanation}</p>
+            <div className="prose prose-invert prose-sm prose-code:text-[0.85em] prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded">
+              <div className="text-slate-300 leading-relaxed">
+                <ReactMarkdown>
+                  {step.explanation}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
 
@@ -204,7 +209,11 @@ export function Workspace() {
               <Code className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-wider">Your Task</span>
             </div>
-            <p className="text-sm text-slate-200 leading-relaxed font-medium">{step.task}</p>
+            <div className="text-sm text-slate-200 leading-relaxed font-medium prose-sm prose-invert prose-p:leading-relaxed prose-code:text-[0.85em] prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded">
+              <ReactMarkdown>
+                {step.task}
+              </ReactMarkdown>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -214,7 +223,11 @@ export function Workspace() {
                 <HelpCircle className="w-4 h-4 text-slate-500 group-open:text-blue-400" />
               </summary>
               <div className="p-3 pt-0 text-sm text-slate-400 border-t border-slate-800/50 italic">
-                {step.hint}
+                <div className="prose-sm prose-invert prose-p:italic prose-code:text-[0.85em] prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded">
+                  <ReactMarkdown>
+                    {step.hint}
+                  </ReactMarkdown>
+                </div>
               </div>
             </details>
 
@@ -362,7 +375,14 @@ export function Workspace() {
                     : "bg-slate-800 border border-slate-700 mr-auto text-slate-300"
                 )}
               >
-                {chat.text}
+                <div className={cn(
+                  "prose-sm prose-invert prose-p:my-0 prose-code:text-[0.85em] prose-code:bg-slate-800/50 prose-code:px-1 prose-code:rounded",
+                  chat.role === 'user' ? "prose-p:text-white" : "prose-p:text-slate-300"
+                )}>
+                  <ReactMarkdown>
+                    {chat.text}
+                  </ReactMarkdown>
+                </div>
               </div>
             ))}
             

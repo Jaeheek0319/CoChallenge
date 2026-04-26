@@ -1,9 +1,8 @@
+from ast import Return
 import os
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from google import genai
-from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,15 +10,105 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Initialize the Gemini client
-# Ensure GEMINI_API_KEY is set in your environment variables (.env file)
 api_key = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
 
-MODEL_ID = "gemma-4-26b-a4b-it"
+try:
+    from google.adk.agents.sequential_agent import SequentialAgent
+    from google.adk.agents.llm_agent import LlmAgent
+    from google.adk import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types
+    import uuid
+    adk_available = True
+except ImportError:
+    print("WARNING: google-adk is not installed or failed to import.")
+    adk_available = False
+
+MODEL_ID = "gemini-2.5-flash"
+
+if adk_available:
+    agent1_idea = LlmAgent(
+        name="Idea_and_Plan_Agent",
+        model=MODEL_ID,
+        instruction="You are Step 1 of a pipeline. Generate a project idea and implementation plan for the user's prompt. Output only the plan."
+    )
+
+    agent2_code = LlmAgent(
+        name="Code_Generator_Agent",
+        model=MODEL_ID,
+        instruction="You are Step 2. Write a complete project implementing the created plan from the previous step. Output the full code."
+    )
+
+    agent3_components = LlmAgent(
+        name="Component_Identifier_Agent",
+        model=MODEL_ID,
+        instruction="You are Step 3. Break apart the project by identifying key functional components and concepts to be taught for each step. Output these components clearly."
+    )
+
+    agent4_step_gen = LlmAgent(
+        name="Step_Generator_Agent",
+        model=MODEL_ID,
+        instruction="""You are Step 4. For each key functional component, create a step according to a JSON format with 'title', 'explanation', 'task', 'hint', 'solution', and 'starterCode'. 
+        CRITICAL TOKEN OPTIMIZATION: 
+        1. Only the VERY FIRST step (index 0) should contain 'starterCode'. This starter code should be a minimal, empty boilerplate (e.g., just the basic HTML structure with no content). 
+        2. For ALL subsequent steps (index 1 and above), set 'starterCode' to an empty string (""). 
+        This ensures the user starts with a blank slate and their progress is maintained as they move through steps without overwriting their code."""
+    )
+
+    agent5_refiner = LlmAgent(
+        name="Starter_Code_Refiner_Agent",
+        model=MODEL_ID,
+        instruction="""You are Step 5. Refine the 'starterCode' for all steps:
+        1. Ensure ONLY step 0 has a non-empty 'starterCode'. This should be a minimal, functional boilerplate (e.g. basic HTML/CSS/JS skeletons but with NO logic or content). 
+        2. For ALL other steps (index 1+), the 'starterCode' MUST be an empty string ("").
+        3. Double check that step 0's starter code is NOT completely empty (it needs minimal structure) but contains no solution code."""
+    )
+
+    agent6_reviser = LlmAgent(
+        name="Content_Reviser_Agent",
+        model=MODEL_ID,
+        instruction="""You are Step 6, the final step. Revise the explanation, task, and hint. 
+        FINAL QUALITY CHECK: 
+        1. Ensure that ONLY step 0 (index 0) has a non-empty 'starterCode' boilerplate. All other steps MUST have 'starterCode': "". 
+        2. CRITICAL: For step 0, ensure that NONE of the requirements specified in the 'task' are already completed in the 'starterCode'. The starter code should provide ONLY the bare-minimum boilerplate structure required to begin the task.
+        IMPORTANT: Your output MUST be ONLY a JSON object representing a structured project lesson, exactly matching this schema:
+        {
+          "title": "Project Title",
+          "description": "Short description of the project",
+          "learningGoals": ["Goal 1", "Goal 2"],
+          "files": [
+            { "name": "index.html", "language": "html", "content": "..." },
+            { "name": "style.css", "language": "css", "content": "..." },
+            { "name": "script.js", "language": "javascript", "content": "..." }
+          ],
+          "steps": [
+            {
+              "title": "Step title",
+              "explanation": "Detailed explanation of concepts",
+              "task": "What the user needs to do",
+              "hint": "A subtle hint",
+              "solution": "The final code for this step",
+              "starterCode": { "filename": "starter code for this step" }
+            }
+          ]
+        }
+        Return ONLY the JSON. No markdown, no backticks."""
+    )
+
+    pipeline = SequentialAgent(
+        name="Project_Generation_Pipeline",
+        sub_agents=[
+            agent1_idea,
+            agent2_code,
+            agent3_components,
+            agent4_step_gen,
+            agent5_refiner,
+            agent6_reviser
+        ]
+    )
 
 @app.route('/api/generateProject', methods=['POST'])
-def generate_project():
+async def generate_project():
     data = request.json
     prompt = data.get('prompt')
     language = data.get('language')
@@ -28,51 +117,111 @@ def generate_project():
     if not prompt or not language or not difficulty:
         return jsonify({"error": "Missing required fields"}), 400
 
-    system_prompt = """You are an expert coding tutor. Your goal is to generate high-quality, guided coding projects for students.
-When a user provides a topic, language, and difficulty, you must respond with a JSON object representing a structured project lesson.
-
-The JSON schema must be:
-{
-  "title": "Project Title",
-  "description": "Short description of the project",
-  "learningGoals": ["Goal 1", "Goal 2"],
-  "files": [
-    { "name": "index.html", "language": "html", "content": "..." },
-    { "name": "style.css", "language": "css", "content": "..." },
-    { "name": "script.js", "language": "javascript", "content": "..." }
-  ],
-  "steps": [
-    {
-      "title": "Step title",
-      "explanation": "Detailed explanation of concepts",
-      "task": "What the user needs to do",
-      "hint": "A subtle hint",
-      "solution": "The final code for this step",
-      "starterCode": { "filename": "starter code for this step" }
-    }
-  ]
-}
-
-Constraints:
-1. For HTML/CSS/JS projects, always provide index.html, style.css, and script.js.
-2. Ensure the code is clean, well-commented, and educational.
-3. Steps should be incremental, building the project from scratch or from logical milestones.
-4. If difficulty is Beginner, explain basic concepts. If Advanced, use modern best practices and more complex logic.
-5. IMPORTANT: Return ONLY the JSON object, no Markdown formatting or backticks."""
-
     full_prompt = f"Topic: {prompt}\nLanguage: {language}\nDifficulty: {difficulty}"
 
     try:
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=system_prompt + "\n\n" + full_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            ),
-        )
+        final_content = ""
+        
+        if adk_available:
+            print("--- Starting ADK Pipeline ---")
+            try:
+                from google.adk import Runner
+                from google.adk.sessions import InMemorySessionService
+                from google.genai import types
+                import uuid
+                
+                runner = Runner(
+                    app_name="Project_Generator",
+                    agent=pipeline,
+                    session_service=InMemorySessionService(),
+                    auto_create_session=True
+                )
+                
+                print("Running ADK sequential pipeline via Runner...")
+                session_id = str(uuid.uuid4())
+                events = runner.run_async(
+                    user_id="default_user",
+                    session_id=session_id,
+                    new_message=types.Content(role="user", parts=[types.Part.from_text(text=full_prompt)])
+                )
+                
+                async for event in events:
+                    print(".", end="", flush=True)
+                    event_text = ""
+                    
+                    # 1. Check for top-level text attribute
+                    if hasattr(event, 'text') and event.text:
+                        event_text = event.text
+                    
+                    # 2. Check for content object (common in ADK)
+                    elif hasattr(event, 'content') and event.content:
+                        c = event.content
+                        if hasattr(c, 'text') and c.text:
+                            event_text = c.text
+                        elif hasattr(c, 'parts') and c.parts:
+                            for p in c.parts:
+                                # Skip internal reasoning parts if present
+                                if hasattr(p, 'thought') and p.thought:
+                                    continue
+                                if hasattr(p, 'text') and p.text:
+                                    event_text += p.text
+                                    
+                    # 3. Check for message object (fallback)
+                    elif hasattr(event, 'message') and hasattr(event.message, 'content'):
+                        msg = event.message.content
+                        if hasattr(msg, 'text') and msg.text:
+                            event_text = msg.text
+                        elif hasattr(msg, 'parts') and msg.parts:
+                            for p in msg.parts:
+                                if hasattr(p, 'thought') and p.thought: continue
+                                if hasattr(p, 'text') and p.text:
+                                    event_text += p.text
+                        elif isinstance(msg, list):
+                            for p in msg:
+                                if hasattr(p, 'text') and p.text:
+                                    event_text += p.text
+                    
+                    if event_text.strip():
+                        final_content = event_text
+                        
+                print("\nPipeline execution finished.")
+            except Exception as e:
+                print(f"Pipeline call via Runner failed ({e}). Falling back to Gemini SDK directly for pipeline simulation.")
+                
+                # Manual Sequential Fallback without ADK's Runner, directly calling the genai model
+                from google import genai
+                client = genai.Client(api_key=api_key)
+                current_context = full_prompt
+                agents = [
+                    agent1_idea, agent2_code, agent3_components, 
+                    agent4_step_gen, agent5_refiner, agent6_reviser
+                ]
+                
+                for idx, agent in enumerate(agents):
+                    print(f"--> Executing {agent.name}...")
+                    response = client.models.generate_content(
+                        model=agent.model,
+                        contents=f"System Instruction: {agent.instruction}\n\nUser Input: {current_context}",
+                    )
+                    current_context = response.text
+                    print(f"    Completed {agent.name}.")
+                
+                final_content = current_context
+                
+            print("--- Pipeline Completed ---")
+        else:
+            print("ADK not available. Using a standard fallback.")
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=MODEL_ID,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            )
+            final_content = response.text
 
-        final_content = response.text
-        # Strip potential markdown formatting that models sometimes include
         if final_content.startswith("```json"):
             final_content = final_content.replace("```json", "", 1)
             if final_content.endswith("```"):
@@ -85,7 +234,6 @@ Constraints:
         
         project_data = json.loads(final_content)
         
-        # Add frontend-specific data
         import random
         import string
         project_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
@@ -119,6 +267,8 @@ Student's Question: {question}
 Provide a helpful, educational response. Don't just give the full solution if they are asking for a hint. Guide them to the answer."""
 
     try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=help_prompt
@@ -156,6 +306,8 @@ Respond ONLY with a JSON object in this format:
 }}"""
 
     try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=prompt,
@@ -165,7 +317,6 @@ Respond ONLY with a JSON object in this format:
         )
         
         final_content = response.text
-        # Strip potential markdown formatting
         if final_content.startswith("```json"):
             final_content = final_content.replace("```json", "", 1)
             if final_content.endswith("```"):
