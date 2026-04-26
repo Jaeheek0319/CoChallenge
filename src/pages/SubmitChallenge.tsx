@@ -31,6 +31,7 @@ interface ApiSubmission {
   deployedUrl: string;
   notes: string;
   locked: boolean;
+  convertOnWin: boolean;
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
@@ -71,6 +72,7 @@ export function SubmitChallenge() {
   const [githubUrl, setGithubUrl] = useState('');
   const [deployedUrl, setDeployedUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [convertOnWin, setConvertOnWin] = useState(true);
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [zipUploading, setZipUploading] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export function SubmitChallenge() {
           setGithubUrl(sub.githubUrl);
           setDeployedUrl(sub.deployedUrl);
           setNotes(sub.notes);
+          if (typeof sub.convertOnWin === 'boolean') setConvertOnWin(sub.convertOnWin);
         }
       })
       .catch((err) => {
@@ -205,6 +208,7 @@ export function SubmitChallenge() {
         githubUrl,
         deployedUrl,
         notes,
+        convertOnWin,
       };
       if (zipMeta) {
         body.zipPath = zipMeta.path;
@@ -422,6 +426,30 @@ export function SubmitChallenge() {
               className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-colors resize-none disabled:opacity-60"
             />
             <p className="text-xs text-slate-500 mt-1">{notes.length} / 4000</p>
+          </Section>
+
+          {/* Convert-on-win opt-in */}
+          <Section
+            title="4. If you win 1st place"
+            subtitle="Auto-publish your winning solution as a guided lesson on the School page so others can learn from it."
+          >
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={convertOnWin}
+                onChange={(e) => setConvertOnWin(e.target.checked)}
+                disabled={!canEdit}
+                className="mt-1 w-4 h-4 rounded border-slate-600 bg-slate-900 text-blue-600 focus:ring-blue-500 disabled:opacity-60"
+              />
+              <span className="text-sm text-slate-300">
+                Turn my submission into a public learning project on{' '}
+                <span className="text-blue-400 font-semibold">School</span> if I take 1st.
+                <span className="block text-xs text-slate-500 mt-1">
+                  We'll generate a step-by-step lesson from your notes + the challenge requirements,
+                  attributed to you.
+                </span>
+              </span>
+            </label>
           </Section>
 
           {/* Actions */}

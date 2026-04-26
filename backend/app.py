@@ -299,12 +299,11 @@ async def generate_project():
                 final_content = final_content[:-3]
         final_content = final_content.strip()
 
-        
         # Post-processing optimization: use json_repair to instantly fix common JSON syntax/truncation issues
         try:
             # json_repair.loads is a drop-in replacement for json.loads that handles mangled JSON
             project_data = json_repair.loads(final_content)
-            
+
             # If it's a string (which can happen with some repair cases), try one more parse
             if isinstance(project_data, str):
                 project_data = json.loads(project_data)
@@ -318,12 +317,12 @@ async def generate_project():
                     raise Exception("Could not recover JSON from agent output even with repair.")
             else:
                 raise
-        
+
         # Apply markdown cleaning to all code fields
         if "files" in project_data:
             for f in project_data["files"]:
                 if "content" in f: f["content"] = clean_code_block(f["content"])
-        
+
         if "steps" in project_data:
             for s in project_data["steps"]:
                 if "solution" in s: s["solution"] = clean_code_block(s["solution"])
@@ -420,7 +419,11 @@ Respond ONLY with a JSON object in this format:
                 final_content = final_content[:-3]
         final_content = final_content.strip()
 
-        return jsonify(json.loads(final_content))
+        first_brace = final_content.find("{")
+        if first_brace == -1:
+            raise ValueError("no JSON object found in model output")
+        parsed, _ = json.JSONDecoder().raw_decode(final_content[first_brace:])
+        return jsonify(parsed)
     except Exception as e:
         print("Failed to check step completion:", e)
         return jsonify({

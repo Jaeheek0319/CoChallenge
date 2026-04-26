@@ -7,6 +7,7 @@ interface ProjectContextType {
   projects: UserProject[];
   loading: boolean;
   saveProject: (project: UserProject) => Promise<void>;
+  addProject: (project: UserProject) => void;
   getProject: (id: string) => UserProject | undefined;
 }
 
@@ -70,10 +71,25 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addProject = (project: UserProject) => {
+    setProjects((prev) => {
+      const filtered = prev.filter((p) => p.id !== project.id);
+      return [...filtered, project];
+    });
+
+    const saved = localStorage.getItem('project-code-projects');
+    const localProjects: UserProject[] = saved ? JSON.parse(saved) : [];
+    const filteredLocal = localProjects.filter((p) => p.id !== project.id);
+    localStorage.setItem(
+      'project-code-projects',
+      JSON.stringify([...filteredLocal, project]),
+    );
+  };
+
   const getProject = (id: string) => projects.find(p => p.id === id);
 
   return (
-    <ProjectContext.Provider value={{ projects, loading, saveProject, getProject }}>
+    <ProjectContext.Provider value={{ projects, loading, saveProject, addProject, getProject }}>
       {children}
     </ProjectContext.Provider>
   );

@@ -64,6 +64,27 @@ export interface PublicProjectSummary {
   updatedAt: string;
 }
 
+export interface SchoolProjectSummary {
+  id: string;
+  title: string;
+  description: string;
+  language: string;
+  difficulty: string;
+  learningGoals: string[];
+  totalSteps: number;
+  sourceChallengeId: string | null;
+  sourceWinnerId: string | null;
+  sourceWinnerUsername: string | null;
+  likes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SchoolProject extends Omit<SchoolProjectSummary, 'totalSteps'> {
+  files: ProjectFile[];
+  steps: LessonStep[];
+}
+
 export interface PublicChallengeSummary {
   id: string;
   authorId: string;

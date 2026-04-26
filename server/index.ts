@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { randomUUID } from 'crypto';
 import express from 'express';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { getDb } from './db';
@@ -21,6 +22,7 @@ interface ProjectDoc {
   steps: unknown[];
   currentStep: number;
   updatedAt: string;
+  forkedFromSchoolId?: string;
 }
 
 interface Podium {
@@ -60,6 +62,7 @@ interface ChallengeDoc {
   podium: Podium | null;
   ranked?: boolean;
   rankingDetail?: AIRankingDetail;
+  schoolProjectId?: string | null;
   createdAt: string;
 }
 
@@ -75,6 +78,7 @@ interface SubmissionDoc {
   deployedUrl: string;
   notes: string;
   locked: boolean;
+  convertOnWin: boolean;
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
@@ -88,6 +92,23 @@ interface EloChangeDoc {
   newRating: number;
   reason: string;
   createdAt: string;
+}
+
+interface SchoolProjectDoc {
+  _id: string;
+  title: string;
+  description: string;
+  language: string;
+  difficulty: string;
+  learningGoals: string[];
+  files: unknown[];
+  steps: unknown[];
+  sourceChallengeId: string | null;
+  sourceWinnerId: string | null;
+  sourceWinnerUsername: string | null;
+  likes: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface VerifiedCompany {
@@ -142,6 +163,141 @@ async function generateSignedDownloadUrl(path: string) {
     .createSignedUrl(path, SUBMISSION_DOWNLOAD_TTL_SECONDS);
   if (error || !data) throw new Error(error?.message ?? 'failed to create download url');
   return data;
+}
+
+const FLASK_URL = process.env.FLASK_URL ?? 'http://localhost:5000';
+
+// Flask's ADK pipeline can take well over the default 5min undici timeout,
+// especially with retry/backoff after a rate-limit hit. Allow up to 10min.
+const flaskDispatcher = new Agent({
+  headersTimeout: 10 * 60_000,
+  bodyTimeout: 10 * 60_000,
+  connectTimeout: 30_000,
+});
+
+async function generateLessonViaFlask(
+  prompt: string,
+  language: string,
+  difficulty: string,
+): Promise<{
+  title: string;
+  description: string;
+  learningGoals: string[];
+  files: unknown[];
+  steps: unknown[];
+  language?: string;
+  difficulty?: string;
+}> {
+  const res = await undiciFetch(`${FLASK_URL}/api/generateProject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, language, difficulty }),
+    dispatcher: flaskDispatcher,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Flask generateProject ${res.status}: ${detail}`);
+  }
+  return (await res.json()) as Awaited<ReturnType<typeof generateLessonViaFlask>>;
+}
+
+function normalizeLessonStep(rawStep: unknown): unknown {
+  if (!rawStep || typeof rawStep !== 'object') return rawStep;
+  const step = rawStep as Record<string, unknown>;
+  // ADK occasionally emits `solution` as a {filename: code} object instead
+  // of a single string. Flatten it to match the LessonStep contract.
+  if (step.solution && typeof step.solution === 'object' && !Array.isArray(step.solution)) {
+    const entries = Object.entries(step.solution as Record<string, unknown>);
+    step.solution = entries
+      .map(([file, code]) =>
+        `=== ${file} ===\n${typeof code === 'string' ? code : JSON.stringify(code)}`,
+      )
+      .join('\n\n');
+  } else if (typeof step.solution !== 'string') {
+    step.solution = '';
+  }
+  return step;
+}
+
+function buildSchoolProjectPrompt(
+  challenge: ChallengeDoc,
+  winner: SubmissionDoc,
+): string {
+  return [
+    `Build a guided lesson that walks a learner from a blank slate to recreating this challenge's winning solution.`,
+    ``,
+    `CHALLENGE TITLE: ${challenge.title}`,
+    `DESCRIPTION: ${challenge.description}`,
+    challenge.requirements ? `REQUIREMENTS: ${challenge.requirements}` : '',
+    challenge.resources ? `RESOURCES: ${challenge.resources}` : '',
+    challenge.starterCode ? `STARTER CODE PROVIDED:\n${challenge.starterCode}` : '',
+    ``,
+    `1ST PLACE WINNER NOTES: ${winner.notes || '(no notes)'}`,
+    winner.githubUrl ? `WINNER GITHUB: ${winner.githubUrl}` : '',
+    winner.deployedUrl ? `WINNER DEMO: ${winner.deployedUrl}` : '',
+    ``,
+    `Produce 5-8 progressive steps. The final step's solution should reach the same outcome the winner achieved.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function convertWinnerToSchoolProject(
+  challenge: ChallengeDoc,
+): Promise<string | null> {
+  if (challenge.schoolProjectId) return challenge.schoolProjectId;
+  const firstUserId = challenge.podium?.firstUserId;
+  if (!firstUserId) return null;
+
+  const db = await getDb();
+  const winner = await db
+    .collection<SubmissionDoc>('challenge_submissions')
+    .findOne({ challengeId: challenge._id, userId: firstUserId });
+  if (!winner) return null;
+  if (!winner.convertOnWin) return null;
+
+  const prompt = buildSchoolProjectPrompt(challenge, winner);
+  const generated = await generateLessonViaFlask(
+    prompt,
+    challenge.language,
+    challenge.difficulty,
+  );
+
+  const winnerProfile = await db
+    .collection<ProfileDoc>('profiles')
+    .findOne({ _id: firstUserId });
+
+  const now = new Date().toISOString();
+  const schoolDoc: SchoolProjectDoc = {
+    _id: randomUUID(),
+    title: typeof generated.title === 'string' && generated.title ? generated.title : challenge.title,
+    description:
+      typeof generated.description === 'string' && generated.description
+        ? generated.description
+        : challenge.description,
+    language: challenge.language,
+    difficulty: challenge.difficulty,
+    learningGoals: Array.isArray(generated.learningGoals)
+      ? generated.learningGoals.filter((g): g is string => typeof g === 'string')
+      : [],
+    files: Array.isArray(generated.files) ? generated.files : [],
+    steps: Array.isArray(generated.steps)
+      ? generated.steps.map(normalizeLessonStep)
+      : [],
+    sourceChallengeId: challenge._id,
+    sourceWinnerId: firstUserId,
+    sourceWinnerUsername: winnerProfile?.username ?? winner.authorUsername ?? null,
+    likes: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.collection<SchoolProjectDoc>('school_projects').insertOne(schoolDoc);
+  await db
+    .collection<ChallengeDoc>('challenges')
+    .updateOne({ _id: challenge._id }, { $set: { schoolProjectId: schoolDoc._id } });
+
+  return schoolDoc._id;
 }
 
 async function deleteSubmissionObject(path: string) {
@@ -1179,6 +1335,11 @@ app.put('/api/submissions/:challengeId', requireAuth, async (req, res) => {
     const email = (req.userEmail ?? '').toLowerCase();
     const username = email ? email.split('@')[0] : 'anonymous';
 
+    const convertOnWin =
+      typeof body.convertOnWin === 'boolean'
+        ? body.convertOnWin
+        : (existing?.convertOnWin ?? true);
+
     const doc: SubmissionDoc = {
       _id: existing?._id ?? randomUUID(),
       challengeId: challenge._id,
@@ -1191,6 +1352,7 @@ app.put('/api/submissions/:challengeId', requireAuth, async (req, res) => {
       deployedUrl,
       notes,
       locked: false,
+      convertOnWin,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       submittedAt: null,
@@ -1410,10 +1572,30 @@ app.post('/api/challenges/:id/grade', requireAuth, async (req, res) => {
       .collection<ChallengeDoc>('challenges')
       .updateOne({ _id: challenge._id }, { $set: { podium } });
 
+    // Auto-convert the 1st-place winner's submission into a public School
+    // project, if they opted in via the convertOnWin flag at submit time.
+    // Best-effort: a Flask/Gemini failure must not block grading.
+    let schoolProjectId: string | null = null;
+    try {
+      schoolProjectId = await convertWinnerToSchoolProject({
+        ...challenge,
+        podium,
+      });
+    } catch (err) {
+      console.error('[school-conversion] failed:', err);
+    }
+
     // Elo is allocated by /api/challenges/:id/rank, not at grade time.
     res.json({
-      challenge: { ...challengeToResponse({ ...challenge, podium }) },
+      challenge: {
+        ...challengeToResponse({
+          ...challenge,
+          podium,
+          schoolProjectId: schoolProjectId ?? challenge.schoolProjectId ?? null,
+        }),
+      },
       eloChanges: [],
+      schoolProjectId,
     });
   } catch (err) {
     res.status(500).json({ error: 'grade failed', detail: String(err) });
@@ -1569,6 +1751,159 @@ app.get('/api/users/:username/elo-history', async (req, res) => {
     res.json(docs.map(({ _id, ...rest }) => ({ id: _id, ...rest })));
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── School (public) projects ─────────────────────────────────────────────
+
+function schoolProjectListItem(doc: SchoolProjectDoc) {
+  // List shape: omit heavy step/file payloads; include attribution + meta
+  const { _id, files, steps, ...rest } = doc;
+  return {
+    id: _id,
+    ...rest,
+    totalSteps: Array.isArray(steps) ? steps.length : 0,
+  };
+}
+
+function schoolProjectDetail(doc: SchoolProjectDoc) {
+  const { _id, ...rest } = doc;
+  return { id: _id, ...rest };
+}
+
+app.get('/api/school/projects', async (_req, res) => {
+  try {
+    const db = await getDb();
+    const docs = await db
+      .collection<SchoolProjectDoc>('school_projects')
+      .find({})
+      .sort({ likes: -1, createdAt: -1 })
+      .toArray();
+    res.json(docs.map(schoolProjectListItem));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+app.get('/api/school/projects/:id', async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await db
+      .collection<SchoolProjectDoc>('school_projects')
+      .findOne({ _id: req.params.id });
+    if (!doc) return res.status(404).json({ error: 'not found' });
+    res.json(schoolProjectDetail(doc));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+app.post('/api/school/projects', requireAuth, async (req, res) => {
+  // Create a school project. For Phase A this is open to any authed user
+  // (a manual seed path). Phase B will call this internally on grading.
+  try {
+    const body = req.body ?? {};
+    const trim = (s: unknown, max: number): string =>
+      typeof s === 'string' ? s.trim().slice(0, max) : '';
+
+    const title = trim(body.title, 200);
+    const description = trim(body.description, 2000);
+    const language = trim(body.language, 40);
+    const difficulty = trim(body.difficulty, 40);
+    if (!title) return res.status(400).json({ error: 'title required' });
+    if (!language) return res.status(400).json({ error: 'language required' });
+    if (!ALLOWED_DIFFICULTIES.has(difficulty)) {
+      return res.status(400).json({ error: 'difficulty must be Beginner|Intermediate|Advanced' });
+    }
+
+    const learningGoals = Array.isArray(body.learningGoals)
+      ? body.learningGoals
+          .filter((g: unknown) => typeof g === 'string')
+          .map((g: string) => g.trim().slice(0, 200))
+          .filter(Boolean)
+          .slice(0, 20)
+      : [];
+    const files = Array.isArray(body.files) ? body.files : [];
+    const steps = Array.isArray(body.steps) ? body.steps : [];
+
+    const sourceChallengeId =
+      typeof body.sourceChallengeId === 'string' ? body.sourceChallengeId : null;
+    const sourceWinnerId =
+      typeof body.sourceWinnerId === 'string' ? body.sourceWinnerId : null;
+    const sourceWinnerUsername =
+      typeof body.sourceWinnerUsername === 'string'
+        ? body.sourceWinnerUsername.toLowerCase()
+        : null;
+
+    const now = new Date().toISOString();
+    const doc: SchoolProjectDoc = {
+      _id: randomUUID(),
+      title,
+      description,
+      language,
+      difficulty,
+      learningGoals,
+      files,
+      steps,
+      sourceChallengeId,
+      sourceWinnerId,
+      sourceWinnerUsername,
+      likes: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const db = await getDb();
+    await db.collection<SchoolProjectDoc>('school_projects').insertOne(doc);
+    res.status(201).json(schoolProjectDetail(doc));
+  } catch (err) {
+    res.status(500).json({ error: 'create failed', detail: String(err) });
+  }
+});
+
+app.post('/api/school/projects/:id/fork', requireAuth, async (req, res) => {
+  // Copy a school project into the user's private projects collection.
+  // Idempotent: if the user has already forked this school project, return
+  // the existing fork instead of creating a duplicate.
+  try {
+    const db = await getDb();
+    const projects = db.collection<ProjectDoc>('projects');
+
+    const existing = await projects.findOne({
+      userId: req.userId!,
+      forkedFromSchoolId: req.params.id,
+    });
+    if (existing) {
+      const { _id, userId: _u, ...rest } = existing;
+      return res.status(200).json({ id: _id, ...rest });
+    }
+
+    const source = await db
+      .collection<SchoolProjectDoc>('school_projects')
+      .findOne({ _id: req.params.id });
+    if (!source) return res.status(404).json({ error: 'school project not found' });
+
+    const newId = randomUUID();
+    const doc: ProjectDoc = {
+      _id: newId,
+      userId: req.userId!,
+      title: source.title,
+      description: source.description,
+      language: source.language,
+      difficulty: source.difficulty,
+      learningGoals: source.learningGoals,
+      files: source.files,
+      steps: source.steps,
+      currentStep: 0,
+      updatedAt: new Date().toISOString(),
+      forkedFromSchoolId: req.params.id,
+    };
+    await projects.insertOne(doc);
+
+    const { _id, userId: _u, ...rest } = doc;
+    res.status(201).json({ id: _id, ...rest });
+  } catch (err) {
+    res.status(500).json({ error: 'fork failed', detail: String(err) });
   }
 });
 

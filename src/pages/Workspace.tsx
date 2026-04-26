@@ -490,7 +490,7 @@ builtins.input = async_input
                 <CheckCircle2 className="w-4 h-4 text-slate-500 group-open:text-green-400" />
               </summary>
               <div className="p-3 pt-0 text-sm font-mono bg-slate-900/50 border-t border-slate-800/50 whitespace-pre-wrap">
-                {step.solution.trim().replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '')}
+                {renderSolution(step.solution)}
               </div>
             </details>
           </div>
@@ -755,4 +755,16 @@ builtins.input = async_input
       </div>
     </div>
   );
+}
+
+function renderSolution(solution: unknown): string {
+  if (typeof solution === 'string') {
+    return solution.trim().replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '');
+  }
+  if (solution && typeof solution === 'object') {
+    return Object.entries(solution as Record<string, unknown>)
+      .map(([file, code]) => `=== ${file} ===\n${typeof code === 'string' ? code : JSON.stringify(code)}`)
+      .join('\n\n');
+  }
+  return '';
 }
