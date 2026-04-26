@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, TrendingUp } from 'lucide-react';
 import { api } from '../lib/api';
+import { usersApi } from '../lib/usersApi';
 
 interface EloChange {
   id: string;
@@ -17,7 +18,7 @@ const CHART_W = 700;
 const CHART_H = 240;
 const PADDING = { top: 24, right: 24, bottom: 36, left: 48 };
 
-export function EloHistoryChart() {
+export function EloHistoryChart({ username }: { username?: string } = {}) {
   const [changes, setChanges] = useState<EloChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +26,12 @@ export function EloHistoryChart() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api
-      .get<EloChange[]>('/api/users/me/elo-history')
+    const promise = username
+      ? usersApi.eloHistory(username)
+      : api.get<EloChange[]>('/api/users/me/elo-history');
+    promise
       .then((data) => {
-        if (!cancelled) setChanges(data);
+        if (!cancelled) setChanges(data as EloChange[]);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
@@ -39,7 +42,7 @@ export function EloHistoryChart() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [username]);
 
   const data = useMemo(() => {
     if (changes.length === 0) return [];
