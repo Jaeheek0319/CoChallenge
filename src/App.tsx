@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
@@ -15,6 +15,16 @@ import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { UserSearch } from './components/UserSearch';
 import { ProjectProvider } from './contexts/ProjectContext';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 export default function App() {
   const { user, signOut } = useAuth();
@@ -39,6 +49,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ProjectProvider>
+        <ScrollToTop />
         <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
           <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
