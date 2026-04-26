@@ -68,6 +68,7 @@ const ALLOWED_DIFFICULTIES = new Set(['Beginner', 'Intermediate', 'Advanced']);
 interface ProfileDoc {
   _id: string;
   userId: string;
+  username: string;
   fullName: string;
   bio: string;
   avatarUrl: string;
@@ -78,9 +79,10 @@ interface ProfileDoc {
   updatedAt: string;
 }
 
-const emptyProfile = (userId: string): ProfileDoc => ({
+const emptyProfile = (userId: string, username: string): ProfileDoc => ({
   _id: userId,
   userId,
+  username,
   fullName: '',
   bio: '',
   avatarUrl: '',
@@ -89,6 +91,63 @@ const emptyProfile = (userId: string): ProfileDoc => ({
   twitterUrl: '',
   updatedAt: '',
 });
+
+const RESERVED_USERNAMES = new Set([
+  'admin', 'settings', 'api', 'login', 'signup', 'logout',
+  'null', 'undefined', 'me', 'search', 'user', 'users',
+  'profile', 'profiles', 'auth', 'health', 'home',
+]);
+
+class UsernameValidationError extends Error {}
+
+function validateUsername(raw: unknown): string {
+  if (typeof raw !== 'string') throw new UsernameValidationError('username must be a string');
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed.length < 3 || trimmed.length > 30) {
+    throw new UsernameValidationError('username must be 3-30 characters');
+  }
+  if (!/^[a-z0-9_-]+$/.test(trimmed)) {
+    throw new UsernameValidationError('username may only contain letters, numbers, _ and -');
+  }
+  if (RESERVED_USERNAMES.has(trimmed)) {
+    throw new UsernameValidationError('username is reserved');
+  }
+  return trimmed;
+}
+
+function deriveUsernameBase(email: string): string {
+  if (!email || !email.includes('@')) return 'user';
+  const cleaned = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const sliced = cleaned.slice(0, 25);
+  if (sliced.length < 3) return `user-${sliced || ''}`.slice(0, 30);
+  if (RESERVED_USERNAMES.has(sliced)) return `${sliced}-1`;
+  return sliced;
+}
+
+async function pickAvailableUsername(base: string): Promise<string> {
+  const db = await getDb();
+  const collection = db.collection<ProfileDoc>('profiles');
+  if (!(await collection.findOne({ username: base }))) return base;
+  for (let i = 1; i < 1000; i++) {
+    const candidate = `${base}-${i}`.slice(0, 30);
+    if (!(await collection.findOne({ username: candidate }))) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}`.slice(0, 30);
+}
+
+let indexesEnsured = false;
+async function ensureIndexes(): Promise<void> {
+  if (indexesEnsured) return;
+  const db = await getDb();
+  await db.collection<ProfileDoc>('profiles').createIndex(
+    { username: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { username: { $type: 'string', $gt: '' } },
+    }
+  );
+  indexesEnsured = true;
+}
 
 function isValidAvatarUrl(url: string, userId: string): boolean {
   if (url === '') return true;
@@ -114,23 +173,71 @@ app.get('/api/me', requireAuth, async (req, res) => {
 
 app.get('/api/profile', requireAuth, async (req, res) => {
   try {
+    await ensureIndexes();
     const db = await getDb();
-    const doc = await db
-      .collection<ProfileDoc>('profiles')
-      .findOne({ _id: req.userId! });
-    const profile = doc ?? emptyProfile(req.userId!);
-    const { _id, userId, ...rest } = profile;
+    const collection = db.collection<ProfileDoc>('profiles');
+    let doc = await collection.findOne({ _id: req.userId! });
+
+    if (!doc) {
+      const base = deriveUsernameBase(req.userEmail ?? '');
+      const username = await pickAvailableUsername(base);
+      doc = emptyProfile(req.userId!, username);
+      await collection.insertOne(doc);
+    } else if (!doc.username) {
+      const base = deriveUsernameBase(req.userEmail ?? '');
+      const username = await pickAvailableUsername(base);
+      await collection.updateOne({ _id: req.userId! }, { $set: { username } });
+      doc.username = username;
+    }
+
+    const { _id, userId, ...rest } = doc;
     res.json(rest);
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
   }
 });
 
+app.get('/api/profile/check-username', requireAuth, async (req, res) => {
+  let username: string;
+  try {
+    username = validateUsername(req.query.username);
+  } catch (err) {
+    if (err instanceof UsernameValidationError) {
+      return res.json({ available: false, reason: err.message });
+    }
+    return res.status(500).json({ error: 'check failed', detail: String(err) });
+  }
+  try {
+    const db = await getDb();
+    const existing = await db
+      .collection<ProfileDoc>('profiles')
+      .findOne({ username });
+    if (!existing) return res.json({ available: true });
+    return res.json({
+      available: existing._id === req.userId,
+      isMine: existing._id === req.userId,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'check failed', detail: String(err) });
+  }
+});
+
 app.put('/api/profile', requireAuth, async (req, res) => {
   try {
+    await ensureIndexes();
     const body = req.body ?? {};
     const trim = (s: unknown, max: number): string =>
       typeof s === 'string' ? s.trim().slice(0, max) : '';
+
+    let username: string;
+    try {
+      username = validateUsername(body.username);
+    } catch (err) {
+      if (err instanceof UsernameValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      throw err;
+    }
 
     const fullName = trim(body.fullName, 100);
     const bio = trim(body.bio, 280);
@@ -147,9 +254,21 @@ app.put('/api/profile', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'avatarUrl must be a Supabase avatars/<userId>/* URL' });
     }
 
+    const db = await getDb();
+    const collection = db.collection<ProfileDoc>('profiles');
+
+    const conflict = await collection.findOne({
+      username,
+      _id: { $ne: req.userId! },
+    });
+    if (conflict) {
+      return res.status(409).json({ error: 'username is taken' });
+    }
+
     const doc: ProfileDoc = {
       _id: req.userId!,
       userId: req.userId!,
+      username,
       fullName,
       bio,
       avatarUrl,
@@ -158,17 +277,12 @@ app.put('/api/profile', requireAuth, async (req, res) => {
       twitterUrl,
       updatedAt: new Date().toISOString(),
     };
-    const db = await getDb();
-    
-    // Preserve githubAccessToken if it exists
-    const existing = await db.collection<ProfileDoc>('profiles').findOne({ _id: req.userId! });
+    const existing = await collection.findOne({ _id: req.userId! });
     if (existing?.githubAccessToken) {
       doc.githubAccessToken = existing.githubAccessToken;
     }
 
-    await db
-      .collection<ProfileDoc>('profiles')
-      .replaceOne({ _id: req.userId! }, doc, { upsert: true });
+    await collection.replaceOne({ _id: req.userId! }, doc, { upsert: true });
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'save failed', detail: String(err) });
@@ -220,11 +334,20 @@ app.get('/api/auth/github/callback', async (req, res) => {
     });
     const githubUser = await userRes.json();
 
+    await ensureIndexes();
     const db = await getDb();
     const existing = await db.collection<ProfileDoc>('profiles').findOne({ _id: String(userId) });
-    
+
+    const username =
+      existing?.username ??
+      (await pickAvailableUsername(
+        githubUser.login
+          ? deriveUsernameBase(`${githubUser.login}@github.com`)
+          : `user-${String(userId).slice(0, 8)}`
+      ));
+
     const updateDoc = {
-      ...emptyProfile(String(userId)),
+      ...emptyProfile(String(userId), username),
       ...existing,
       githubAccessToken: accessToken,
       githubUrl: existing?.githubUrl || githubUser.html_url || '',
@@ -480,6 +603,108 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
     res.status(201).json({ id: _id, ...rest });
   } catch (err) {
     res.status(500).json({ error: 'create failed', detail: String(err) });
+  }
+});
+
+function publicProfile(doc: ProfileDoc) {
+  return {
+    username: doc.username,
+    fullName: doc.fullName,
+    bio: doc.bio,
+    avatarUrl: doc.avatarUrl,
+    linkedinUrl: doc.linkedinUrl,
+    githubUrl: doc.githubUrl,
+    twitterUrl: doc.twitterUrl,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const q = String(req.query.q ?? '').trim();
+    if (!q) return res.json([]);
+    const re = new RegExp(escapeRegex(q), 'i');
+    const db = await getDb();
+    const docs = await db
+      .collection<ProfileDoc>('profiles')
+      .find({
+        $and: [
+          { username: { $type: 'string', $gt: '' } },
+          { $or: [{ username: re }, { fullName: re }] },
+        ],
+      })
+      .limit(10)
+      .toArray();
+    res.json(
+      docs.map((d) => ({
+        username: d.username,
+        fullName: d.fullName,
+        avatarUrl: d.avatarUrl,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ error: 'search failed', detail: String(err) });
+  }
+});
+
+app.get('/api/users/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const db = await getDb();
+    const doc = await db
+      .collection<ProfileDoc>('profiles')
+      .findOne({ username });
+    if (!doc) return res.status(404).json({ error: 'not found' });
+    res.json(publicProfile(doc));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+app.get('/api/users/:username/projects', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const db = await getDb();
+    const profile = await db
+      .collection<ProfileDoc>('profiles')
+      .findOne({ username });
+    if (!profile) return res.status(404).json({ error: 'user not found' });
+    const docs = await db
+      .collection<ProjectDoc>('projects')
+      .find({ userId: profile.userId })
+      .sort({ updatedAt: -1 })
+      .toArray();
+    const projects = docs.map(({ _id, userId, files, steps, ...rest }) => ({
+      id: _id,
+      ...rest,
+      totalSteps: Array.isArray(steps) ? steps.length : 0,
+    }));
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+app.get('/api/users/:username/challenges', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const db = await getDb();
+    const profile = await db
+      .collection<ProfileDoc>('profiles')
+      .findOne({ username });
+    if (!profile) return res.status(404).json({ error: 'user not found' });
+    const docs = await db
+      .collection<ChallengeDoc>('challenges')
+      .find({ authorId: profile.userId })
+      .sort({ createdAt: -1 })
+      .toArray();
+    res.json(docs.map(({ _id, authorEmail, ...rest }) => ({ id: _id, ...rest })));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
   }
 });
 
