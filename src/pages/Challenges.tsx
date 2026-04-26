@@ -205,7 +205,7 @@ export function Challenges() {
             ) : (
               <div
                 ref={carouselRef}
-                className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
+                className="flex gap-6 overflow-x-auto pt-6 pb-8 snap-x snap-mandatory -mx-6 px-6 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {featured.map((challenge, idx) => {
@@ -217,7 +217,7 @@ export function Challenges() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.1 }}
-                      className="min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden hover:border-indigo-500/50 transition-all border-b-4 border-b-transparent hover:border-b-indigo-500 relative flex flex-col"
+                      className="min-w-[320px] md:min-w-[400px] snap-center flex-shrink-0 group glass-panel rounded-3xl overflow-hidden hover:border-indigo-500/50 transition-all border-b-4 border-b-transparent hover:border-b-indigo-500 relative flex flex-col hover:scale-105 hover:bg-slate-800/50 hover:z-10"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
@@ -295,7 +295,7 @@ export function Challenges() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.05 }}
-                    className="group glass-panel rounded-2xl p-6 hover:border-slate-600 transition-all border-b-2 hover:border-b-blue-500 flex flex-col h-full"
+                    className="group glass-panel rounded-2xl p-6 hover:border-slate-600 transition-all border-b-2 hover:border-b-blue-500 flex flex-col h-full hover:scale-105 hover:bg-slate-800/50 hover:z-10"
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">

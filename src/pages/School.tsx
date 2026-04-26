@@ -138,7 +138,7 @@ export function School() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: idx * 0.05 }}
-            className="group glass-panel rounded-2xl overflow-hidden hover:border-slate-600 transition-all border-b-2 hover:border-b-blue-500"
+            className="group glass-panel rounded-2xl overflow-hidden hover:border-slate-600 transition-all border-b-2 hover:border-b-blue-500 hover:scale-105 hover:bg-slate-800/50 hover:z-10"
           >
             <div className="relative h-40 bg-slate-900 flex items-center justify-center border-b border-slate-800 overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent opacity-60" />
