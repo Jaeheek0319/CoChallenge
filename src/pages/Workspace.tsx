@@ -30,6 +30,10 @@ export function Workspace() {
   const [userInput, setUserInput] = useState('');
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
   const [isChecking, setIsChecking] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [stepFeedback, setStepFeedback] = useState<{isComplete: boolean, message: string} | null>(null);
+
+  const lastLoadedProjectId = useRef<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -39,22 +43,35 @@ export function Workspace() {
       if (p) {
         setProject(p);
         
-        const stepIndex = p.currentStep || 0;
-        let initialFiles = p.files;
-        const stepData = p.steps[stepIndex];
-        
-        // Apply starter code for the current step if it exists
-        if (stepData && stepData.starterCode) {
-          initialFiles = initialFiles.map(file => {
-            if (stepData.starterCode![file.name]) {
-              return { ...file, content: stepData.starterCode![file.name] };
-            }
-            return file;
-          });
+        // Only initialize state if we're loading a DIFFERENT project
+        if (lastLoadedProjectId.current !== projectId) {
+          const stepIndex = p.currentStep || 0;
+          let initialFiles = p.files;
+          const stepData = p.steps[stepIndex];
+          
+          // Apply starter code for the current step if it exists
+          if (stepData && stepData.starterCode) {
+            initialFiles = initialFiles.map(file => {
+              if (stepData.starterCode![file.name]) {
+                return { ...file, content: stepData.starterCode![file.name] };
+              }
+              return file;
+            });
+          }
+          
+          setFiles(initialFiles);
+          setCurrentStep(stepIndex);
+          
+          // Mark all previous steps as completed
+          const completed = [];
+          for (let i = 0; i < stepIndex; i++) {
+            completed.push(i);
+          }
+          setCompletedSteps(completed);
+          
+          setStepFeedback(null);
+          lastLoadedProjectId.current = projectId;
         }
-        
-        setFiles(initialFiles);
-        setCurrentStep(stepIndex);
       } else {
         navigate('/');
       }
@@ -95,8 +112,10 @@ export function Workspace() {
 
   const handleNextStep = () => {
     if (project && currentStep < project.steps.length - 1) {
+      setCompletedSteps(prev => Array.from(new Set([...prev, currentStep])));
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
+      setStepFeedback(null);
       
       // If the next step has starter code, apply it
       const stepData = project.steps[nextStep];
@@ -110,13 +129,14 @@ export function Workspace() {
         setFiles(newFiles);
       }
       
-      saveProject({ ...project, currentStep: nextStep, files });
+      saveProject({ ...project, currentStep: Math.max(project.currentStep, nextStep), files });
     }
   };
 
   const handlePrevStep = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
+      setStepFeedback(null);
     }
   };
 
@@ -145,27 +165,27 @@ export function Workspace() {
     if (!project) return;
     
     setIsChecking(true);
-    setAiLoading(true);
+    setStepFeedback(null);
+    
     const currentCode = files.map(f => `// ${f.name}\n${f.content}`).join('\n\n');
     const stepData = project.steps[currentStep];
-    
-    // Add a loading message to the chat history
-    setChatHistory(prev => [...prev, { role: 'user', text: `Can you check if I completed the task: "${stepData.task}"?` }]);
 
     try {
       const result = await checkStepCompletion(currentCode, stepData.task, stepData.solution);
-      setChatHistory(prev => [
-        ...prev, 
-        { 
-          role: 'ai', 
-          text: `${result.isComplete ? '✅ Excellent work!' : '❌ Not quite yet.'} ${result.feedback}`
-        }
-      ]);
+      setStepFeedback({
+        isComplete: result.isComplete,
+        message: result.feedback
+      });
+      if (result.isComplete) {
+        setCompletedSteps(prev => Array.from(new Set([...prev, currentStep])));
+      }
     } catch (e) {
-      setChatHistory(prev => [...prev, { role: 'ai', text: "Sorry, I couldn't check your code right now." }]);
+      setStepFeedback({
+        isComplete: false,
+        message: "Sorry, I couldn't check your code right now."
+      });
     } finally {
       setIsChecking(false);
-      setAiLoading(false);
     }
   };
 
@@ -237,37 +257,57 @@ export function Workspace() {
                 <CheckCircle2 className="w-4 h-4 text-slate-500 group-open:text-green-400" />
               </summary>
               <div className="p-3 pt-0 text-sm font-mono bg-slate-900/50 border-t border-slate-800/50 whitespace-pre-wrap">
-                {step.solution}
+                {step.solution.trim().replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '')}
               </div>
             </details>
           </div>
         </div>
 
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex items-center justify-between gap-3">
-          <button 
-            onClick={handlePrevStep}
-            disabled={currentStep === 0}
-            className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-30 transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
+        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex flex-col gap-3">
+          {stepFeedback && (
+            <div className={cn(
+              "p-3 rounded-lg text-sm flex gap-2 items-start",
+              stepFeedback.isComplete ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+            )}>
+              {stepFeedback.isComplete ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+              <div>
+                <p className="font-bold mb-1">{stepFeedback.isComplete ? 'Excellent work!' : 'Not quite yet.'}</p>
+                <p className="opacity-90 leading-relaxed text-xs">{stepFeedback.message}</p>
+              </div>
+            </div>
+          )}
           
-          <div className="flex-1 flex gap-2">
+          <div className="flex items-center justify-between gap-3">
             <button 
-              onClick={handleCheckStep}
-              disabled={isChecking}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
+              onClick={handlePrevStep}
+              disabled={currentStep === 0}
+              className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-30 transition-colors"
             >
-              {isChecking ? 'Checking...' : 'Check'}
+              <ChevronLeft className="w-6 h-6" />
             </button>
-            <button 
-              onClick={handleNextStep}
-              disabled={currentStep === project.steps.length - 1}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
-            >
-              Next Step
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            
+            <div className="flex-1 flex gap-2">
+              <button 
+                onClick={handleCheckStep}
+                disabled={isChecking}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2"
+              >
+                {isChecking ? 'Checking...' : 'Check'}
+              </button>
+              <button 
+                onClick={handleNextStep}
+                disabled={currentStep === project.steps.length - 1 || !completedSteps.includes(currentStep)}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-bold flex-1 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed",
+                  (currentStep === project.steps.length - 1 || !completedSteps.includes(currentStep))
+                    ? "bg-slate-800 text-slate-200"
+                    : "bg-blue-600 hover:bg-blue-500 text-white"
+                )}
+              >
+                Next Step
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
