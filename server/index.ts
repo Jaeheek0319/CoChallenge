@@ -31,6 +31,10 @@ interface ChallengeDoc {
   language: string;
   difficulty: string;
   tags: string[];
+  requirements: string;
+  resources: string;
+  starterCode: string;
+  estimatedTime: string;
   company: { name: string; role: string } | null;
   verified: boolean;
   likes: number;
@@ -154,8 +158,17 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
       ? body.tags
           .map((t: unknown) => (typeof t === 'string' ? t.trim() : ''))
           .filter((t: string) => t.length > 0 && t.length <= 30)
-          .slice(0, 6)
+          .slice(0, 12)
       : [];
+
+    const requirements =
+      typeof body.requirements === 'string' ? body.requirements.slice(0, 4000) : '';
+    const resources =
+      typeof body.resources === 'string' ? body.resources.slice(0, 4000) : '';
+    const starterCode =
+      typeof body.starterCode === 'string' ? body.starterCode.slice(0, 10000) : '';
+    const estimatedTime =
+      typeof body.estimatedTime === 'string' ? body.estimatedTime.trim().slice(0, 40) : '';
 
     const submittedCompanyName =
       typeof body.company?.name === 'string' ? body.company.name.trim().slice(0, 60) : '';
@@ -185,6 +198,10 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
       language,
       difficulty,
       tags,
+      requirements,
+      resources,
+      starterCode,
+      estimatedTime,
       company,
       verified: Boolean(verifiedCompany),
       likes: 0,

@@ -4,6 +4,8 @@ import { Home } from './pages/Home';
 import { Workspace } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
 import { Challenges } from './pages/Challenges';
+import { CreateChallenge } from './pages/CreateChallenge';
+import { PreviewChallenge } from './pages/PreviewChallenge';
 import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
@@ -61,10 +63,6 @@ export default function App() {
                     <Link to="/school" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                       <Globe className="w-4 h-4" />
                       School
-                    </Link>
-                    <Link to="/dashboard" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                      <Layout className="w-4 h-4" />
-                      My Learning
                     </Link>
                   </div>
                 </div>
@@ -153,6 +151,8 @@ export default function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/generation" element={<Generation />} />
               <Route path="/challenges" element={<Challenges />} />
+              <Route path="/create-challenge" element={<CreateChallenge />} />
+              <Route path="/preview-challenge" element={<PreviewChallenge />} />
               <Route path="/school" element={<School />} />
               <Route path="/profile" element={<Profile />} />
             </Routes>

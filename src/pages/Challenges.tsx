@@ -1,8 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Globe, Heart, Users, ArrowRight, BadgeCheck, Building2, ChevronRight, ChevronLeft, User } from 'lucide-react';
-import { SubmitChallengeModal } from '../components/SubmitChallengeModal';
 
 const FEATURED_CHALLENGES = [
   {
@@ -101,7 +100,6 @@ const COMMUNITY_CHALLENGES = [
 export function Challenges() {
   const navigate = useNavigate();
   const carouselRef = useRef<HTMLDivElement>(null);
-  const [isSubmitOpen, setIsSubmitOpen] = useState(false);
 
   const scrollLeft = () => {
     if (carouselRef.current) {
@@ -131,7 +129,7 @@ export function Challenges() {
           </p>
         </div>
         <button
-          onClick={() => setIsSubmitOpen(true)}
+          onClick={() => navigate('/create-challenge')}
           className="self-start md:self-auto bg-white text-slate-950 hover:bg-slate-200 px-6 py-3 rounded-xl font-bold transition-all active:scale-95 whitespace-nowrap"
         >
           Submit Challenge
@@ -273,11 +271,6 @@ export function Challenges() {
           ))}
         </div>
       </div>
-      
-      <SubmitChallengeModal
-        isOpen={isSubmitOpen}
-        onClose={() => setIsSubmitOpen(false)}
-      />
     </div>
   );
 }
