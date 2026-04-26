@@ -8,7 +8,8 @@ import {
   Play, RotateCcw, Save, Trash2, 
   ChevronLeft, ChevronRight, HelpCircle, 
   Layout, Code, Eye, MessageSquare, 
-  Sparkles, CheckCircle2, AlertCircle, Terminal, Github, Loader2
+  Sparkles, CheckCircle2, AlertCircle, Terminal, Github, Loader2,
+  BookOpen
 
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -20,6 +21,7 @@ import { cn } from '../lib/utils';
 import { io, Socket } from 'socket.io-client';
 import { XTerm } from '../components/XTerm';
 import { Notification } from '../components/Notification';
+import { LessonModal } from '../components/LessonModal';
 
 
 export function Workspace() {
@@ -44,6 +46,8 @@ export function Workspace() {
   const [isPyodideReady, setIsPyodideReady] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+  const [showLessonModal, setShowLessonModal] = useState(false);
+
 
 
 
@@ -130,6 +134,10 @@ export function Workspace() {
           
           setStepFeedback(null);
           lastLoadedProjectId.current = projectId;
+
+          if (p.steps[stepIndex]?.lesson) {
+            setShowLessonModal(true);
+          }
         }
       } else {
         navigate('/');
@@ -306,6 +314,10 @@ builtins.input = async_input
       }
       
       saveProject({ ...project, currentStep: Math.max(project.currentStep, nextStep), files });
+
+      if (project.steps[nextStep]?.lesson) {
+        setShowLessonModal(true);
+      }
     }
   };
 
@@ -402,6 +414,12 @@ builtins.input = async_input
 
   return (
     <div className="h-[calc(100vh-64px)] flex overflow-hidden bg-slate-950">
+      <LessonModal
+        isOpen={showLessonModal}
+        onClose={() => setShowLessonModal(false)}
+        title={step?.title || ''}
+        lesson={step?.lesson || ''}
+      />
       <Notification 
         isVisible={!!notification}
         message={notification?.message || ''}
@@ -414,6 +432,15 @@ builtins.input = async_input
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h2 className="font-bold text-slate-200">Instructions</h2>
           <div className="text-xs font-mono text-slate-500">
+            {step.lesson && (
+              <button
+                onClick={() => setShowLessonModal(true)}
+                className="p-1.5 hover:bg-slate-800 rounded-md text-blue-400 transition-colors mr-2"
+                title="View Lesson"
+              >
+                <BookOpen className="w-4 h-4" />
+              </button>
+            )}
             Step {currentStep + 1} / {project.steps.length}
           </div>
         </div>
