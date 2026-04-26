@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CircleStar, Heart, Users, ArrowRight, Code, BadgeCheck, Building2, ChevronRight, ChevronLeft, User, Search, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { api } from '../lib/api';
@@ -303,12 +303,15 @@ export function Challenges() {
                     className="group glass-panel rounded-2xl p-6 hover:border-slate-600 transition-all border-b-2 hover:border-b-blue-500 flex flex-col h-full hover:scale-105 hover:bg-slate-800/50 hover:z-10"
                   >
                     <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center">
-                          <User className="w-3 h-3 text-slate-400" />
+                      <Link 
+                        to={`/u/${challenge.authorUsername}`}
+                        className="flex items-center gap-2 group/author"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center group-hover/author:bg-slate-700 transition-colors">
+                          <User className="w-3 h-3 text-slate-400 group-hover/author:text-blue-400 transition-colors" />
                         </div>
-                        <span className="text-xs font-medium text-slate-400">@{challenge.authorUsername}</span>
-                      </div>
+                        <span className="text-xs font-medium text-slate-400 group-hover/author:text-blue-400 transition-colors">@{challenge.authorUsername}</span>
+                      </Link>
                       <div className="flex items-center gap-1 text-xs text-slate-500">
                         <Heart className="w-3.5 h-3.5 hover:fill-red-500 hover:text-red-500 cursor-pointer transition-colors" />
                         {challenge.likes}
