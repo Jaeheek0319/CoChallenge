@@ -1,10 +1,39 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { User as UserIcon, Github, Linkedin, Twitter } from 'lucide-react';
-import type { UserProfile } from '../types';
+import type { UserProfile, UserProject, PublicProjectSummary } from '../types';
 import { usersApi } from '../lib/usersApi';
 import { UserProjectsList } from '../components/UserProjectsList';
 import { UserChallengesList } from '../components/UserChallengesList';
+import { ProjectDial } from '../components/ProjectDial';
+import { WinsDial } from '../components/WinsDial';
+import { EloHistoryChart } from '../components/EloHistoryChart';
+
+const EMPTY_WINS = {
+  byDifficulty: { Beginner: 0, Intermediate: 0, Advanced: 0 },
+  byPlacement: { first: 0, second: 0, third: 0 },
+};
+
+function toDialProjects(items: PublicProjectSummary[]): UserProject[] {
+  return items.map((p) => ({
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    language: p.language as UserProject['language'],
+    difficulty: p.difficulty as UserProject['difficulty'],
+    learningGoals: p.learningGoals,
+    files: [],
+    steps: Array.from({ length: p.totalSteps }, () => ({
+      title: '',
+      explanation: '',
+      task: '',
+      hint: '',
+      solution: '',
+    })),
+    currentStep: p.currentStep,
+    updatedAt: p.updatedAt,
+  }));
+}
 
 export function PublicProfile() {
   const { username = '' } = useParams<{ username: string }>();
@@ -12,6 +41,8 @@ export function PublicProfile() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialProjects, setDialProjects] = useState<UserProject[]>([]);
+  const [wins, setWins] = useState(EMPTY_WINS);
 
   useEffect(() => {
     if (!username) return;
@@ -19,6 +50,9 @@ export function PublicProfile() {
     setLoading(true);
     setNotFound(false);
     setError(null);
+    setDialProjects([]);
+    setWins(EMPTY_WINS);
+
     usersApi
       .get(username)
       .then((p) => {
@@ -32,6 +66,23 @@ export function PublicProfile() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
+    usersApi
+      .projects(username)
+      .then((items) => {
+        if (!cancelled) setDialProjects(toDialProjects(items));
+      })
+      .catch(() => {});
+
+    usersApi
+      .podiumWins(username)
+      .then((data) => {
+        if (!cancelled) {
+          setWins({ byDifficulty: data.byDifficulty, byPlacement: data.byPlacement });
+        }
+      })
+      .catch(() => {});
+
     return () => {
       cancelled = true;
     };
@@ -97,6 +148,15 @@ export function PublicProfile() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2 mb-6">
+        <ProjectDial projects={dialProjects} />
+        <WinsDial byDifficulty={wins.byDifficulty} byPlacement={wins.byPlacement} />
+      </div>
+
+      <div className="mb-6">
+        <EloHistoryChart username={profile.username} />
       </div>
 
       <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl shadow-black/20 mt-6">
