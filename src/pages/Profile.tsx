@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ProjectDial } from '../components/ProjectDial';
+import { WinsDial } from '../components/WinsDial';
+import { EloHistoryChart } from '../components/EloHistoryChart';
 import { useProjects } from '../hooks/useProjects';
 import {
   User as UserIcon,
@@ -12,13 +14,12 @@ import {
   AtSign,
   Check,
   AlertCircle,
+  Trophy,
 } from 'lucide-react';
 import { profileApi } from '../lib/profileApi';
 import { api } from '../lib/api';
 import { uploadAvatar, deleteAvatar } from '../lib/avatarApi';
 import { AvatarCropModal } from '../components/AvatarCropModal';
-import { UserProjectsList } from '../components/UserProjectsList';
-import { UserChallengesList } from '../components/UserChallengesList';
 import type { UserProfile } from '../types';
 
 const emailPrefix = (email: string | null | undefined) =>
@@ -32,6 +33,7 @@ const emptyDraft: UserProfile = {
   linkedinUrl: '',
   githubUrl: '',
   twitterUrl: '',
+  elo: 500,
   updatedAt: '',
 };
 
@@ -74,6 +76,11 @@ export function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [wins, setWins] = useState({
+    byDifficulty: { Beginner: 0, Intermediate: 0, Advanced: 0 },
+    byPlacement: { first: 0, second: 0, third: 0 },
+  });
+
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<UserProfile>(emptyDraft);
   const [saving, setSaving] = useState(false);
@@ -107,6 +114,25 @@ export function Profile() {
       cancelled = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!profile?.username) return;
+    let cancelled = false;
+    api
+      .get<{
+        byDifficulty: { Beginner: number; Intermediate: number; Advanced: number };
+        byPlacement: { first: number; second: number; third: number };
+      }>(`/api/users/${encodeURIComponent(profile.username)}/podium-wins`)
+      .then((data) => {
+        if (!cancelled) {
+          setWins({ byDifficulty: data.byDifficulty, byPlacement: data.byPlacement });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.username]);
 
   const startEdit = () => {
     const base = profile ?? emptyDraft;
@@ -243,11 +269,22 @@ export function Profile() {
           {profile?.username && (
             <p className="text-xs text-slate-400">@{profile.username}</p>
           )}
+          {profile && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-200">
+              <Trophy className="w-3.5 h-3.5" />
+              {profile.elo} elo
+            </div>
+          )}
         </div>
 
         {/* Dial Section */}
-        <div className="max-w-2xl h-40">
-          <ProjectDial projects={projects} />
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          <div className="max-w-2xl">
+            <ProjectDial projects={projects} />
+          </div>
+          <div className="max-w-2xl">
+            <WinsDial byDifficulty={wins.byDifficulty} byPlacement={wins.byPlacement} />
+          </div>
         </div>
       </div>
 
@@ -422,18 +459,10 @@ export function Profile() {
         )}
       </div>
 
-      {profile?.username && !editing && (
-        <>
-          <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl shadow-black/20 mt-6">
-            <h2 className="text-2xl font-semibold text-white mb-6">Challenges authored</h2>
-            <UserChallengesList username={profile.username} />
-          </div>
-
-          <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl shadow-black/20 mt-6">
-            <h2 className="text-2xl font-semibold text-white mb-6">Projects</h2>
-            <UserProjectsList username={profile.username} />
-          </div>
-        </>
+      {!editing && (
+        <div className="mt-6">
+          <EloHistoryChart />
+        </div>
       )}
 
       <AvatarCropModal

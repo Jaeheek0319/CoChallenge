@@ -5,6 +5,9 @@ import { motion } from 'motion/react';
 import { ArrowLeft, Play, Copy, CheckCircle2 } from 'lucide-react';
 
 interface ChallengePreviewData {
+  challengeId?: string;
+  state?: 'open' | 'closed' | 'graded';
+  dueDate?: string;
   title: string;
   description: string;
   difficulty: string;
@@ -133,6 +136,24 @@ export function PreviewChallenge() {
           <span className="px-3 py-1 bg-slate-800 text-slate-300 rounded-full text-xs font-bold">
             {challengeData.estimatedTime}
           </span>
+          {challengeData.state === 'closed' && (
+            <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-full text-xs font-bold">
+              Closed
+            </span>
+          )}
+          {challengeData.state === 'graded' && (
+            <span className="px-3 py-1 bg-violet-500/10 border border-violet-500/20 text-violet-300 rounded-full text-xs font-bold">
+              Graded
+            </span>
+          )}
+          {challengeData.challengeId && challengeData.state === 'open' && (
+            <button
+              onClick={() => navigate(`/challenges/${challengeData.challengeId}/submit`)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-blue-900/30 active:scale-95"
+            >
+              Submit your project
+            </button>
+          )}
         </div>
       </div>
 

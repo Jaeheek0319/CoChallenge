@@ -6,11 +6,15 @@ import { Dashboard } from './pages/Dashboard';
 import { Challenges } from './pages/Challenges';
 import { CreateChallenge } from './pages/CreateChallenge';
 import { PreviewChallenge } from './pages/PreviewChallenge';
+import { SubmitChallenge } from './pages/SubmitChallenge';
+import { GradeChallenge } from './pages/GradeChallenge';
+import { ChallengeDojoPage } from './pages/ChallengeDojoPage';
+import { MyChallenges } from './pages/MyChallenges';
 import { School } from './pages/School';
 import { Generation } from './pages/Generation';
 import { Profile } from './pages/Profile';
 import { PublicProfile } from './pages/PublicProfile';
-import { Trophy, Layout, Globe, LogOut, Sparkles, User, GraduationCap, CircleStar } from 'lucide-react';
+import { Trophy, Layout, Globe, LogOut, Sparkles, Swords, ClipboardList, User, GraduationCap, CircleStar } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { UserSearch } from './components/UserSearch';
@@ -116,6 +120,22 @@ export default function App() {
                               <Layout className="w-4 h-4 inline mr-2" />
                               My Learning
                             </Link>
+                            <Link
+                              to="/challenge-dojo"
+                              className="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                              onClick={() => setIsProfileDropdownOpen(false)}
+                            >
+                              <Swords className="w-4 h-4 inline mr-2" />
+                              Challenge Dojo
+                            </Link>
+                            <Link
+                              to="/my-challenges"
+                              className="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                              onClick={() => setIsProfileDropdownOpen(false)}
+                            >
+                              <ClipboardList className="w-4 h-4 inline mr-2" />
+                              My Challenges
+                            </Link>
                           </div>
                         )}
                       </div>
@@ -169,6 +189,10 @@ export default function App() {
               <Route path="/challenges" element={<Challenges />} />
               <Route path="/create-challenge" element={<CreateChallenge />} />
               <Route path="/preview-challenge" element={<PreviewChallenge />} />
+              <Route path="/challenges/:challengeId/submit" element={<SubmitChallenge />} />
+              <Route path="/challenges/:challengeId/grade" element={<GradeChallenge />} />
+              <Route path="/challenge-dojo" element={<ChallengeDojoPage />} />
+              <Route path="/my-challenges" element={<MyChallenges />} />
               <Route path="/school" element={<School />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/u/:username" element={<PublicProfile />} />

@@ -22,6 +22,29 @@ export function CreateChallenge() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const defaultDueDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    d.setMinutes(0, 0, 0);
+    // datetime-local needs a 'YYYY-MM-DDTHH:MM' string in local time
+    const tzOffsetMs = d.getTimezoneOffset() * 60_000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+  })();
+
+  const minDueDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const tzOffsetMs = d.getTimezoneOffset() * 60_000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+  })();
+
+  const maxDueDate = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    const tzOffsetMs = d.getTimezoneOffset() * 60_000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+  })();
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -33,6 +56,7 @@ export function CreateChallenge() {
     resources: '',
     starterCode: '',
     estimatedTime: '4 hours',
+    dueDate: defaultDueDate,
     isCompanyChallenge: false,
     companyName: ''
   });
@@ -75,6 +99,20 @@ export function CreateChallenge() {
     }
     if (formData.tags.length === 0) {
       newErrors.tags = 'Select at least one tag';
+    }
+    if (!formData.dueDate) {
+      newErrors.dueDate = 'Due date is required';
+    } else {
+      const due = new Date(formData.dueDate);
+      const ms = due.getTime();
+      const now = Date.now();
+      if (!Number.isFinite(ms)) {
+        newErrors.dueDate = 'Invalid due date';
+      } else if (ms - now < 24 * 60 * 60 * 1000) {
+        newErrors.dueDate = 'Due date must be at least 1 day from now';
+      } else if (ms - now > 365 * 24 * 60 * 60 * 1000) {
+        newErrors.dueDate = 'Due date must be within 1 year';
+      }
     }
     if (formData.isCompanyChallenge && !formData.companyName.trim()) {
       newErrors.companyName = 'Company name is required for company challenges';
@@ -119,6 +157,7 @@ export function CreateChallenge() {
         resources: formData.resources,
         starterCode: formData.starterCode,
         estimatedTime: formData.estimatedTime,
+        dueDate: new Date(formData.dueDate).toISOString(),
         company: formData.isCompanyChallenge
           ? { name: formData.companyName, role: '' }
           : undefined,
@@ -277,6 +316,32 @@ export function CreateChallenge() {
               </span>
               Technical Details
             </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Due Date */}
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-2">
+                  Due Date *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.dueDate}
+                  min={minDueDate}
+                  max={maxDueDate}
+                  onChange={(e) => handleInputChange('dueDate', e.target.value)}
+                  className={`w-full bg-slate-900 border rounded-lg px-4 py-3 text-white focus:outline-none transition-colors ${
+                    errors.dueDate
+                      ? 'border-red-500/50 focus:border-red-500'
+                      : 'border-slate-700 focus:border-blue-500'
+                  }`}
+                />
+                {errors.dueDate ? (
+                  <p className="text-red-400 text-xs mt-1">{errors.dueDate}</p>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-1">Submissions close at this time. Min 1 day, max 1 year.</p>
+                )}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Difficulty */}

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { randomUUID } from 'crypto';
 import express from 'express';
+import { createClient } from '@supabase/supabase-js';
 import { getDb } from './db';
 import { requireAuth } from './auth';
 
@@ -21,6 +22,14 @@ interface ProjectDoc {
   updatedAt: string;
 }
 
+interface Podium {
+  firstUserId: string | null;
+  secondUserId: string | null;
+  thirdUserId: string | null;
+  rationale: { first: string; second: string; third: string };
+  gradedAt: string;
+}
+
 interface ChallengeDoc {
   _id: string;
   authorId: string;
@@ -39,6 +48,35 @@ interface ChallengeDoc {
   verified: boolean;
   logoUrl: string | null;
   likes: number;
+  dueDate: string;
+  podium: Podium | null;
+  createdAt: string;
+}
+
+interface SubmissionDoc {
+  _id: string;
+  challengeId: string;
+  userId: string;
+  authorEmail: string;
+  authorUsername: string;
+  zipPath: string | null;
+  zipFileName: string | null;
+  githubUrl: string;
+  deployedUrl: string;
+  notes: string;
+  locked: boolean;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+}
+
+interface EloChangeDoc {
+  _id: string;
+  userId: string;
+  challengeId: string;
+  delta: number;
+  newRating: number;
+  reason: string;
   createdAt: string;
 }
 
@@ -56,14 +94,75 @@ const VERIFIED_COMPANY_DOMAINS: Record<string, VerifiedCompany> = {
 };
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
+const SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET ?? 'logos';
+const SUBMISSION_BUCKET = process.env.SUPABASE_SUBMISSION_BUCKET ?? 'challenge-submissions';
+const SUBMISSION_DOWNLOAD_TTL_SECONDS = 300;
+
+const supabaseAdmin =
+  SUPABASE_URL && SUPABASE_SECRET_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
 
 function publicLogoUrl(file: string): string | null {
   if (!SUPABASE_URL) return null;
   return `${SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${file}`;
 }
 
+async function generateSignedUploadUrl(path: string) {
+  if (!supabaseAdmin) {
+    throw new Error('SUPABASE_SECRET_KEY not configured on server');
+  }
+  const { data, error } = await supabaseAdmin.storage
+    .from(SUBMISSION_BUCKET)
+    .createSignedUploadUrl(path, { upsert: true });
+  if (error || !data) throw new Error(error?.message ?? 'failed to create upload url');
+  return data;
+}
+
+async function generateSignedDownloadUrl(path: string) {
+  if (!supabaseAdmin) {
+    throw new Error('SUPABASE_SECRET_KEY not configured on server');
+  }
+  const { data, error } = await supabaseAdmin.storage
+    .from(SUBMISSION_BUCKET)
+    .createSignedUrl(path, SUBMISSION_DOWNLOAD_TTL_SECONDS);
+  if (error || !data) throw new Error(error?.message ?? 'failed to create download url');
+  return data;
+}
+
+async function deleteSubmissionObject(path: string) {
+  if (!supabaseAdmin) return;
+  await supabaseAdmin.storage.from(SUBMISSION_BUCKET).remove([path]);
+}
+
 const ALLOWED_DIFFICULTIES = new Set(['Beginner', 'Intermediate', 'Advanced']);
+const ELO_STARTING_VALUE = 500;
+const PODIUM_DELTAS: [number, number, number] = [200, 100, 50];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const ONE_YEAR_MS = 365 * ONE_DAY_MS;
+const SUBMISSION_NOTES_MAX = 4000;
+const SUBMISSION_URL_MAX = 500;
+
+function deriveChallengeState(doc: ChallengeDoc): 'open' | 'closed' | 'graded' {
+  if (doc.podium) return 'graded';
+  const due = Date.parse(doc.dueDate);
+  if (!Number.isFinite(due)) return 'open';
+  return Date.now() < due ? 'open' : 'closed';
+}
+
+function challengeToResponse(doc: ChallengeDoc) {
+  const { _id, ...rest } = doc;
+  return { id: _id, ...rest, state: deriveChallengeState(doc) };
+}
+
+function submissionToResponse(doc: SubmissionDoc) {
+  const { _id, ...rest } = doc;
+  return { id: _id, ...rest };
+}
 
 interface ProfileDoc {
   _id: string;
@@ -76,6 +175,7 @@ interface ProfileDoc {
   githubUrl: string;
   twitterUrl: string;
   githubAccessToken?: string;
+  elo: number;
   updatedAt: string;
 }
 
@@ -89,6 +189,7 @@ const emptyProfile = (userId: string, username: string): ProfileDoc => ({
   linkedinUrl: '',
   githubUrl: '',
   twitterUrl: '',
+  elo: ELO_STARTING_VALUE,
   updatedAt: '',
 });
 
@@ -149,6 +250,51 @@ async function ensureIndexes(): Promise<void> {
   indexesEnsured = true;
 }
 
+async function loadProfile(userId: string): Promise<ProfileDoc> {
+  const db = await getDb();
+  const doc = await db.collection<ProfileDoc>('profiles').findOne({ _id: userId });
+  if (!doc) return emptyProfile(userId, '');
+  return { ...emptyProfile(userId, doc.username ?? ''), ...doc };
+}
+
+async function applyElo(
+  userId: string,
+  challengeId: string,
+  delta: number,
+  reason: string,
+): Promise<EloChangeDoc> {
+  const db = await getDb();
+  const profile = await loadProfile(userId);
+  const newRating = Math.max(0, profile.elo + delta);
+  await db.collection<ProfileDoc>('profiles').updateOne(
+    { _id: userId },
+    {
+      $set: { elo: newRating, updatedAt: new Date().toISOString() },
+      $setOnInsert: {
+        userId,
+        fullName: '',
+        bio: '',
+        avatarUrl: '',
+        linkedinUrl: '',
+        githubUrl: '',
+        twitterUrl: '',
+      },
+    },
+    { upsert: true },
+  );
+  const change: EloChangeDoc = {
+    _id: randomUUID(),
+    userId,
+    challengeId,
+    delta,
+    newRating,
+    reason,
+    createdAt: new Date().toISOString(),
+  };
+  await db.collection<EloChangeDoc>('elo_changes').insertOne(change);
+  return change;
+}
+
 function isValidAvatarUrl(url: string, userId: string): boolean {
   if (url === '') return true;
   const re = /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/avatars\/([^/]+)\/[^/]+\.(png|jpe?g|webp)(\?.*)?$/i;
@@ -190,7 +336,9 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       doc.username = username;
     }
 
-    const { _id, userId, ...rest } = doc;
+    // Backfill any missing fields (elo, etc.) for older profiles
+    const profile: ProfileDoc = { ...emptyProfile(req.userId!, doc.username), ...doc };
+    const { _id, userId, ...rest } = profile;
     res.json(rest);
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
@@ -265,6 +413,7 @@ app.put('/api/profile', requireAuth, async (req, res) => {
       return res.status(409).json({ error: 'username is taken' });
     }
 
+    const existing = await loadProfile(req.userId!);
     const doc: ProfileDoc = {
       _id: req.userId!,
       userId: req.userId!,
@@ -275,13 +424,12 @@ app.put('/api/profile', requireAuth, async (req, res) => {
       linkedinUrl,
       githubUrl,
       twitterUrl,
+      elo: existing.elo,
       updatedAt: new Date().toISOString(),
     };
-    const existing = await collection.findOne({ _id: req.userId! });
-    if (existing?.githubAccessToken) {
+    if (existing.githubAccessToken) {
       doc.githubAccessToken = existing.githubAccessToken;
     }
-
     await collection.replaceOne({ _id: req.userId! }, doc, { upsert: true });
     res.status(204).end();
   } catch (err) {
@@ -511,8 +659,7 @@ app.get('/api/challenges', async (_req, res) => {
       .find({})
       .sort({ likes: -1, createdAt: -1 })
       .toArray();
-    const challenges = docs.map(({ _id, ...rest }) => ({ id: _id, ...rest }));
-    res.json(challenges);
+    res.json(docs.map(challengeToResponse));
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
   }
@@ -537,6 +684,19 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
     }
     if (!ALLOWED_DIFFICULTIES.has(difficulty)) {
       return res.status(400).json({ error: 'difficulty must be Beginner | Intermediate | Advanced' });
+    }
+
+    const dueDateRaw = typeof body.dueDate === 'string' ? body.dueDate.trim() : '';
+    const dueDateMs = Date.parse(dueDateRaw);
+    if (!Number.isFinite(dueDateMs)) {
+      return res.status(400).json({ error: 'dueDate required (ISO 8601 timestamp)' });
+    }
+    const now = Date.now();
+    if (dueDateMs - now < ONE_DAY_MS) {
+      return res.status(400).json({ error: 'dueDate must be at least 1 day in the future' });
+    }
+    if (dueDateMs - now > ONE_YEAR_MS) {
+      return res.status(400).json({ error: 'dueDate must be within 1 year' });
     }
 
     const tags = Array.isArray(body.tags)
@@ -593,14 +753,15 @@ app.post('/api/challenges', requireAuth, async (req, res) => {
       verified: Boolean(verifiedCompany),
       logoUrl,
       likes: 0,
+      dueDate: new Date(dueDateMs).toISOString(),
+      podium: null,
       createdAt: new Date().toISOString(),
     };
 
     const db = await getDb();
     await db.collection<ChallengeDoc>('challenges').insertOne(doc);
 
-    const { _id, ...rest } = doc;
-    res.status(201).json({ id: _id, ...rest });
+    res.status(201).json(challengeToResponse(doc));
   } catch (err) {
     res.status(500).json({ error: 'create failed', detail: String(err) });
   }
@@ -703,6 +864,480 @@ app.get('/api/users/:username/challenges', async (req, res) => {
       .sort({ createdAt: -1 })
       .toArray();
     res.json(docs.map(({ _id, authorEmail, ...rest }) => ({ id: _id, ...rest })));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── Single challenge fetch ────────────────────────────────────────────────
+app.get('/api/challenges/:id', async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.id });
+    if (!doc) return res.status(404).json({ error: 'not found' });
+    res.json(challengeToResponse(doc));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── Podium wins for a user (verified challenges only) ────────────────────
+app.get('/api/users/:username/podium-wins', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const db = await getDb();
+    const profile = await db
+      .collection<ProfileDoc>('profiles')
+      .findOne({ username });
+    if (!profile) return res.status(404).json({ error: 'user not found' });
+    const userId = profile.userId;
+
+    const challenges = await db
+      .collection<ChallengeDoc>('challenges')
+      .find({
+        verified: true,
+        podium: { $ne: null },
+        $or: [
+          { 'podium.firstUserId': userId },
+          { 'podium.secondUserId': userId },
+          { 'podium.thirdUserId': userId },
+        ],
+      })
+      .sort({ 'podium.gradedAt': -1 })
+      .toArray();
+
+    const byPlacement = { first: 0, second: 0, third: 0 };
+    const byDifficulty = { Beginner: 0, Intermediate: 0, Advanced: 0 };
+    const wins = challenges.map((c) => {
+      let placement: 1 | 2 | 3 = 3;
+      if (c.podium!.firstUserId === userId) {
+        placement = 1;
+        byPlacement.first++;
+      } else if (c.podium!.secondUserId === userId) {
+        placement = 2;
+        byPlacement.second++;
+      } else {
+        placement = 3;
+        byPlacement.third++;
+      }
+      const diff = c.difficulty as keyof typeof byDifficulty;
+      if (diff in byDifficulty) byDifficulty[diff]++;
+      return {
+        challengeId: c._id,
+        title: c.title,
+        company: c.company,
+        difficulty: c.difficulty,
+        placement,
+        gradedAt: c.podium!.gradedAt,
+      };
+    });
+
+    res.json({ total: wins.length, byPlacement, byDifficulty, wins });
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── Challenges I created (for profile "Challenges Created" tab) ───────────
+app.get('/api/challenges/mine/created', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenges = await db
+      .collection<ChallengeDoc>('challenges')
+      .find({ authorId: req.userId! })
+      .sort({ createdAt: -1 })
+      .toArray();
+    if (challenges.length === 0) return res.json([]);
+
+    const ids = challenges.map((c) => c._id);
+    const counts = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .aggregate<{ _id: string; total: number; locked: number }>([
+        { $match: { challengeId: { $in: ids } } },
+        {
+          $group: {
+            _id: '$challengeId',
+            total: { $sum: 1 },
+            locked: { $sum: { $cond: ['$locked', 1, 0] } },
+          },
+        },
+      ])
+      .toArray();
+    const countMap = new Map(counts.map((c) => [c._id, c]));
+
+    res.json(
+      challenges.map((c) => {
+        const count = countMap.get(c._id);
+        return {
+          ...challengeToResponse(c),
+          submissionCount: count?.locked ?? 0,
+          draftCount: (count?.total ?? 0) - (count?.locked ?? 0),
+        };
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── My submissions across all challenges (for Challenge Dojo) ─────────────
+app.get('/api/submissions/mine', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const submissions = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .find({ userId: req.userId! })
+      .sort({ updatedAt: -1 })
+      .toArray();
+    if (submissions.length === 0) return res.json([]);
+
+    const challengeIds = [...new Set(submissions.map((s) => s.challengeId))];
+    const challenges = await db
+      .collection<ChallengeDoc>('challenges')
+      .find({ _id: { $in: challengeIds } })
+      .toArray();
+    const challengeMap = new Map(challenges.map((c) => [c._id, c]));
+
+    res.json(
+      submissions.map((s) => {
+        const ch = challengeMap.get(s.challengeId);
+        let placement: 1 | 2 | 3 | null = null;
+        if (ch?.podium) {
+          if (ch.podium.firstUserId === s.userId) placement = 1;
+          else if (ch.podium.secondUserId === s.userId) placement = 2;
+          else if (ch.podium.thirdUserId === s.userId) placement = 3;
+        }
+        return {
+          ...submissionToResponse(s),
+          challenge: ch ? challengeToResponse(ch) : null,
+          placement,
+        };
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── My submission for a specific challenge ────────────────────────────────
+app.get('/api/submissions/:challengeId/me', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .findOne({ challengeId: req.params.challengeId, userId: req.userId! });
+    if (!doc) return res.status(404).json({ error: 'no submission yet' });
+    res.json(submissionToResponse(doc));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── Save draft submission (or update unlocked one) ────────────────────────
+app.put('/api/submissions/:challengeId', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenge = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.challengeId });
+    if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+    if (deriveChallengeState(challenge) !== 'open') {
+      return res.status(400).json({ error: 'challenge is closed; submissions locked' });
+    }
+
+    const existing = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .findOne({ challengeId: challenge._id, userId: req.userId! });
+    if (existing?.locked) {
+      return res.status(409).json({ error: 'submission already locked; cannot edit' });
+    }
+
+    const body = req.body ?? {};
+    const trim = (s: unknown, max: number) =>
+      typeof s === 'string' ? s.trim().slice(0, max) : '';
+    const githubUrl = trim(body.githubUrl, SUBMISSION_URL_MAX);
+    const deployedUrl = trim(body.deployedUrl, SUBMISSION_URL_MAX);
+    const notes = typeof body.notes === 'string' ? body.notes.slice(0, SUBMISSION_NOTES_MAX) : '';
+    const validUrl = (u: string) => u === '' || /^https?:\/\//i.test(u);
+    if (!validUrl(githubUrl) || !validUrl(deployedUrl)) {
+      return res.status(400).json({ error: 'urls must start with http(s)://' });
+    }
+
+    const zipPath =
+      typeof body.zipPath === 'string' && body.zipPath.startsWith(`${challenge._id}/`)
+        ? body.zipPath
+        : (existing?.zipPath ?? null);
+    const zipFileName =
+      typeof body.zipFileName === 'string' ? body.zipFileName.slice(0, 200) : (existing?.zipFileName ?? null);
+
+    const now = new Date().toISOString();
+    const email = (req.userEmail ?? '').toLowerCase();
+    const username = email ? email.split('@')[0] : 'anonymous';
+
+    const doc: SubmissionDoc = {
+      _id: existing?._id ?? randomUUID(),
+      challengeId: challenge._id,
+      userId: req.userId!,
+      authorEmail: email,
+      authorUsername: username,
+      zipPath,
+      zipFileName,
+      githubUrl,
+      deployedUrl,
+      notes,
+      locked: false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      submittedAt: null,
+    };
+
+    await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .replaceOne(
+        { challengeId: challenge._id, userId: req.userId! },
+        doc,
+        { upsert: true },
+      );
+    res.json(submissionToResponse(doc));
+  } catch (err) {
+    res.status(500).json({ error: 'save failed', detail: String(err) });
+  }
+});
+
+// ─── Get a signed upload URL for the zip ───────────────────────────────────
+app.post('/api/submissions/:challengeId/upload-url', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenge = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.challengeId });
+    if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+    if (deriveChallengeState(challenge) !== 'open') {
+      return res.status(400).json({ error: 'challenge is closed' });
+    }
+    const existing = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .findOne({ challengeId: challenge._id, userId: req.userId! });
+    if (existing?.locked) {
+      return res.status(409).json({ error: 'submission already locked' });
+    }
+
+    const path = `${challenge._id}/${req.userId!}.zip`;
+    const data = await generateSignedUploadUrl(path);
+    res.json({ ...data, path });
+  } catch (err) {
+    res.status(500).json({ error: 'upload-url failed', detail: String(err) });
+  }
+});
+
+// ─── Lock submission (final submit) ────────────────────────────────────────
+app.post('/api/submissions/:challengeId/submit', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenge = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.challengeId });
+    if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+    if (deriveChallengeState(challenge) !== 'open') {
+      return res.status(400).json({ error: 'challenge is closed' });
+    }
+
+    const existing = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .findOne({ challengeId: challenge._id, userId: req.userId! });
+    if (!existing) return res.status(404).json({ error: 'no draft to submit' });
+    if (existing.locked) return res.status(409).json({ error: 'already submitted' });
+    if (!existing.zipPath && !existing.githubUrl && !existing.deployedUrl) {
+      return res.status(400).json({ error: 'submit requires a zip, GitHub URL, or deployed URL' });
+    }
+
+    const now = new Date().toISOString();
+    await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .updateOne(
+        { _id: existing._id },
+        { $set: { locked: true, submittedAt: now, updatedAt: now } },
+      );
+    res.json({ ...submissionToResponse(existing), locked: true, submittedAt: now, updatedAt: now });
+  } catch (err) {
+    res.status(500).json({ error: 'submit failed', detail: String(err) });
+  }
+});
+
+// ─── List submissions for a challenge (creator only) ───────────────────────
+app.get('/api/challenges/:id/submissions', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenge = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.id });
+    if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+    if (challenge.authorId !== req.userId) {
+      return res.status(403).json({ error: 'only challenge creator can view submissions' });
+    }
+
+    const submissions = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .find({ challengeId: challenge._id, locked: true })
+      .sort({ submittedAt: 1 })
+      .toArray();
+    if (submissions.length === 0) return res.json([]);
+
+    const userIds = submissions.map((s) => s.userId);
+    const profiles = await db
+      .collection<ProfileDoc>('profiles')
+      .find({ _id: { $in: userIds } })
+      .toArray();
+    const profileMap = new Map(profiles.map((p) => [p._id, p]));
+
+    res.json(
+      submissions.map((s) => {
+        const p = profileMap.get(s.userId);
+        return {
+          ...submissionToResponse(s),
+          author: {
+            userId: s.userId,
+            email: s.authorEmail,
+            username: s.authorUsername,
+            fullName: p?.fullName ?? '',
+            avatarUrl: p?.avatarUrl ?? '',
+            linkedinUrl: p?.linkedinUrl ?? '',
+            githubUrl: p?.githubUrl ?? '',
+            twitterUrl: p?.twitterUrl ?? '',
+          },
+        };
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
+// ─── Signed download URL for a submission zip (creator only) ───────────────
+app.get(
+  '/api/challenges/:challengeId/submissions/:userId/download-url',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const db = await getDb();
+      const challenge = await db
+        .collection<ChallengeDoc>('challenges')
+        .findOne({ _id: req.params.challengeId });
+      if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+      if (challenge.authorId !== req.userId) {
+        return res.status(403).json({ error: 'only challenge creator can download submissions' });
+      }
+      const submission = await db
+        .collection<SubmissionDoc>('challenge_submissions')
+        .findOne({ challengeId: challenge._id, userId: req.params.userId });
+      if (!submission?.zipPath) {
+        return res.status(404).json({ error: 'no zip uploaded for this submission' });
+      }
+      const data = await generateSignedDownloadUrl(submission.zipPath);
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'download-url failed', detail: String(err) });
+    }
+  },
+);
+
+// ─── Grade challenge — creator only, after due date ────────────────────────
+app.post('/api/challenges/:id/grade', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const challenge = await db
+      .collection<ChallengeDoc>('challenges')
+      .findOne({ _id: req.params.id });
+    if (!challenge) return res.status(404).json({ error: 'challenge not found' });
+    if (challenge.authorId !== req.userId) {
+      return res.status(403).json({ error: 'only challenge creator can grade' });
+    }
+    if (deriveChallengeState(challenge) === 'open') {
+      return res.status(400).json({ error: 'cannot grade until due date passes' });
+    }
+    if (challenge.podium) {
+      return res.status(409).json({ error: 'already graded' });
+    }
+
+    const body = req.body ?? {};
+    const podiumIn = body.podium ?? {};
+    const slots: Array<'firstUserId' | 'secondUserId' | 'thirdUserId'> = [
+      'firstUserId',
+      'secondUserId',
+      'thirdUserId',
+    ];
+    const ids: (string | null)[] = slots.map((k) =>
+      typeof podiumIn[k] === 'string' && podiumIn[k].length > 0 ? podiumIn[k] : null,
+    );
+    const filled = ids.filter((x): x is string => Boolean(x));
+    if (filled.length === 0) {
+      return res.status(400).json({ error: 'pick at least one podium slot' });
+    }
+    if (new Set(filled).size !== filled.length) {
+      return res.status(400).json({ error: 'podium slots must be distinct users' });
+    }
+
+    const lockedSubmissions = await db
+      .collection<SubmissionDoc>('challenge_submissions')
+      .find({ challengeId: challenge._id, locked: true })
+      .toArray();
+    const validUserIds = new Set(lockedSubmissions.map((s) => s.userId));
+    for (const id of filled) {
+      if (!validUserIds.has(id)) {
+        return res.status(400).json({ error: `userId ${id} did not submit to this challenge` });
+      }
+    }
+
+    const trim = (s: unknown) => (typeof s === 'string' ? s.slice(0, 2000) : '');
+    const podium: Podium = {
+      firstUserId: ids[0],
+      secondUserId: ids[1],
+      thirdUserId: ids[2],
+      rationale: {
+        first: trim(podiumIn.rationale?.first),
+        second: trim(podiumIn.rationale?.second),
+        third: trim(podiumIn.rationale?.third),
+      },
+      gradedAt: new Date().toISOString(),
+    };
+
+    await db
+      .collection<ChallengeDoc>('challenges')
+      .updateOne({ _id: challenge._id }, { $set: { podium } });
+
+    // Apply elo stub for verified challenges only.
+    const eloChanges: EloChangeDoc[] = [];
+    if (challenge.verified) {
+      for (let i = 0; i < ids.length; i++) {
+        const userId = ids[i];
+        if (!userId) continue;
+        const reason = `Placed ${i + 1}${['st', 'nd', 'rd'][i]} in "${challenge.title}"`;
+        const change = await applyElo(userId, challenge._id, PODIUM_DELTAS[i], reason);
+        eloChanges.push(change);
+      }
+    }
+
+    res.json({
+      challenge: { ...challengeToResponse({ ...challenge, podium }) },
+      eloChanges,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'grade failed', detail: String(err) });
+  }
+});
+
+// ─── Elo history for a user (self only for now) ────────────────────────────
+app.get('/api/users/me/elo-history', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb();
+    const docs = await db
+      .collection<EloChangeDoc>('elo_changes')
+      .find({ userId: req.userId! })
+      .sort({ createdAt: 1 })
+      .toArray();
+    res.json(docs.map(({ _id, ...rest }) => ({ id: _id, ...rest })));
   } catch (err) {
     res.status(500).json({ error: 'fetch failed', detail: String(err) });
   }
