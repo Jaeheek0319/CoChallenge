@@ -92,12 +92,6 @@ export function School() {
           <h1 className="text-4xl font-bold mb-2">Learn Self-Paced, Project-Based</h1>
           <p className="text-slate-400 font-medium">Explore hand-picked project ideas to kickstart your coding journey. Pick one and our AI will build a personalized lesson for it.</p>
         </div>
-
-        <div className="flex items-center gap-4 bg-slate-900/50 p-1 rounded-xl border border-slate-800">
-          <button className="px-4 py-2 bg-blue-600 rounded-lg text-sm font-bold">Featured</button>
-          <button className="px-4 py-2 hover:bg-slate-800 rounded-lg text-sm font-bold text-slate-400 transition-colors">Trending</button>
-          <button className="px-4 py-2 hover:bg-slate-800 rounded-lg text-sm font-bold text-slate-400 transition-colors">Newest</button>
-        </div>
       </div>
 
       {/* Search Bar & Filters */}

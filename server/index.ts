@@ -1343,6 +1343,26 @@ app.get('/api/users/me/elo-history', requireAuth, async (req, res) => {
   }
 });
 
+// ─── Public elo history for a user by username ────────────────────────────
+app.get('/api/users/:username/elo-history', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const db = await getDb();
+    const profile = await db
+      .collection<ProfileDoc>('profiles')
+      .findOne({ username });
+    if (!profile) return res.status(404).json({ error: 'user not found' });
+    const docs = await db
+      .collection<EloChangeDoc>('elo_changes')
+      .find({ userId: profile.userId })
+      .sort({ createdAt: 1 })
+      .toArray();
+    res.json(docs.map(({ _id, ...rest }) => ({ id: _id, ...rest })));
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed', detail: String(err) });
+  }
+});
+
 const port = Number(process.env.PORT) || 3001;
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);

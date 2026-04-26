@@ -17,6 +17,22 @@ async function getJson<T>(path: string): Promise<T> {
 
 type PublicUserProfile = Omit<UserProfile, never>;
 
+export interface PodiumWins {
+  byDifficulty: { Beginner: number; Intermediate: number; Advanced: number };
+  byPlacement: { first: number; second: number; third: number };
+  wins: unknown[];
+}
+
+export interface PublicEloChange {
+  id: string;
+  userId: string;
+  challengeId: string;
+  delta: number;
+  newRating: number;
+  reason: string;
+  createdAt: string;
+}
+
 export const usersApi = {
   search: (q: string) => getJson<PublicUser[]>(`/api/users/search?q=${encodeURIComponent(q)}`),
   get: (username: string) => getJson<PublicUserProfile>(`/api/users/${encodeURIComponent(username)}`),
@@ -24,4 +40,8 @@ export const usersApi = {
     getJson<PublicProjectSummary[]>(`/api/users/${encodeURIComponent(username)}/projects`),
   challenges: (username: string) =>
     getJson<PublicChallengeSummary[]>(`/api/users/${encodeURIComponent(username)}/challenges`),
+  podiumWins: (username: string) =>
+    getJson<PodiumWins>(`/api/users/${encodeURIComponent(username)}/podium-wins`),
+  eloHistory: (username: string) =>
+    getJson<PublicEloChange[]>(`/api/users/${encodeURIComponent(username)}/elo-history`),
 };
